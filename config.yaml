@@ -1,0 +1,48 @@
+# Video-to-Text default configuration
+# Override via .env (secrets) or CLI flags.
+
+# Audio extraction settings
+audio:
+  sample_rate: 16000
+  channels: 1
+
+# ASR (speech-to-text) settings
+asr:
+  engine: faster-whisper
+  model_size: small         # tiny | base | small | medium
+  device: cuda
+  compute_type: float16     # float16 | int8_float16 (use int8 if VRAM tight)
+  language: null            # null = auto-detect; or "zh", "en", "ja", etc.
+  beam_size: 5
+  vad_filter: true
+  word_timestamps: true
+
+# Keyframe extraction
+keyframe:
+  interval_sec: 5.0         # extract one frame every N seconds
+  format: jpg
+  quality: 90
+  max_keyframes: 2000
+
+# OCR settings
+ocr:
+  engine: paddleocr
+  lang: ch                  # PaddleOCR: "ch" = Chinese + English
+  use_gpu: false            # false = CPU (avoids VRAM conflict with Whisper)
+  conf_threshold: 0.5
+
+# Vision / scene description
+vision:
+  provider: deepseek        # deepseek | anthropic | openai
+  model: deepseek-chat
+  max_tokens: 200
+  temperature: 0.3
+  batch_size: 1
+
+# Output
+output:
+  dir: ./outputs
+  formats:
+    - json
+    - markdown
+  srt_max_chars_per_line: 42

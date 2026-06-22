@@ -1,0 +1,28 @@
+# Private info
+PRIVATE.md
+.env
+
+# Video files (too large for git)
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.webm
+*.flv
+
+# Output
+outputs/
+temp/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
