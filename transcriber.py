@@ -45,19 +45,21 @@ def transcribe(
     from faster_whisper import WhisperModel
 
     # Workaround: if compute_type is float16 but GPU doesn't support it,
-    # try int8_float16 instead.
+    # try int8_float16 instead. CPU never supports float16.
     effective_compute = compute_type
-    if device == "cuda" and compute_type == "float16":
-        try:
-            import torch
-            if not torch.cuda.is_available():
-                raise TranscriptionError("CUDA requested but not available.")
-            # Check compute capability — float16 needs >= 7.0
-            cap = torch.cuda.get_device_capability(0)
-            if cap[0] < 7:
+    if compute_type == "float16":
+        if device == "cpu":
+            effective_compute = "int8"
+        elif device == "cuda":
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    raise TranscriptionError("CUDA requested but not available.")
+                cap = torch.cuda.get_device_capability(0)
+                if cap[0] < 7:
+                    effective_compute = "int8_float16"
+            except Exception:
                 effective_compute = "int8_float16"
-        except Exception:
-            effective_compute = "int8_float16"
 
     # fmt: off
     model = WhisperModel(

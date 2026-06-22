@@ -26,15 +26,15 @@ keyframe:
 
 # OCR settings
 ocr:
-  engine: paddleocr
-  lang: ch                  # PaddleOCR: "ch" = Chinese + English
+  engine: easyocr
+  lang: ch_sim,en           # EasyOCR: "ch_sim" = Simplified Chinese, "en" = English
   use_gpu: false            # false = CPU (avoids VRAM conflict with Whisper)
   conf_threshold: 0.5
 
 # Vision / scene description
 vision:
-  provider: deepseek        # deepseek | anthropic | openai
-  model: deepseek-chat
+  provider: gemini          # gemini | deepseek | anthropic | openai
+  model: gemini-2.5-flash
   max_tokens: 200
   temperature: 0.3
   batch_size: 1

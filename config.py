@@ -39,15 +39,15 @@ class KeyFrameConfig(BaseModel):
 
 
 class OcrConfig(BaseModel):
-    engine: str = "paddleocr"
-    lang: str = "ch"                   # PaddleOCR: "ch" = Chinese + English
+    engine: str = "easyocr"
+    lang: str = "ch_sim,en"            # EasyOCR: comma-separated language codes
     use_gpu: bool = False              # default CPU to avoid VRAM conflict
     conf_threshold: float = 0.5
 
 
 class VisionConfig(BaseModel):
-    provider: str = "deepseek"          # deepseek / anthropic / openai
-    model: str = "deepseek-chat"
+    provider: str = "gemini"            # gemini / deepseek / anthropic / openai
+    model: str = "gemini-2.5-flash"
     max_tokens: int = 200
     temperature: float = 0.3
     batch_size: int = 1                # frames per API call
@@ -68,6 +68,7 @@ class PipelineConfig(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     # Secrets (loaded from .env)
+    gemini_api_key: str = ""
     deepseek_api_key: str = ""
     anthropic_api_key: str = ""
 
@@ -103,6 +104,8 @@ def load_config(
 
     # 3. Merge in env secrets
     env_data: dict[str, Any] = {}
+    if api_key := os.getenv("GEMINI_API_KEY"):
+        env_data["gemini_api_key"] = api_key
     if api_key := os.getenv("DEEPSEEK_API_KEY"):
         env_data["deepseek_api_key"] = api_key
     if api_key := os.getenv("ANTHROPIC_API_KEY"):
@@ -116,6 +119,7 @@ def load_config(
         "ocr": (yaml_data.get("ocr") or {}),
         "vision": (yaml_data.get("vision") or {}),
         "output": (yaml_data.get("output") or {}),
+        "gemini_api_key": env_data.get("gemini_api_key", ""),
         "deepseek_api_key": env_data.get("deepseek_api_key", ""),
         "anthropic_api_key": env_data.get("anthropic_api_key", ""),
     }

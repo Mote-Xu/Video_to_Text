@@ -2,6 +2,7 @@
 
 import base64
 import json
+import time
 from pathlib import Path
 
 from models import KeyFrame, SceneDescription
@@ -19,6 +20,10 @@ SCENE_PROMPT = """Describe this video frame concisely. Return ONLY valid JSON (n
 
 # Provider configs: {name: (base_url, env_var_hint)}
 PROVIDERS = {
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "env_var": "GEMINI_API_KEY",
+    },
     "deepseek": {
         "base_url": "https://api.deepseek.com",
         "env_var": "DEEPSEEK_API_KEY",
@@ -94,13 +99,21 @@ def _describe_with_openai_compat(
     client = OpenAI(api_key=api_key, base_url=base_url)
     results: list[SceneDescription] = []
 
+    # Gemini free tier: ~5 RPM → need ~15s between requests
+    delay = 15.0 if "generativelanguage" in base_url else 0.0
+
     for kf in keyframes:
         if not kf.image_path.exists():
             continue
 
-        # Read and encode image
-        with open(kf.image_path, "rb") as f:
-            image_data = base64.b64encode(f.read()).decode("utf-8")
+        # Read and resize image (smaller = faster, fewer rate limits)
+        from PIL import Image
+        import io
+        img = Image.open(kf.image_path).convert("RGB")
+        img.thumbnail((512, 512), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=75)
+        image_data = base64.b64encode(buf.getvalue()).decode("utf-8")
 
         ext = kf.image_path.suffix.lower()
         mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
@@ -108,21 +121,37 @@ def _describe_with_openai_compat(
 
         data_uri = f"data:{mime};base64,{image_data}"
 
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": data_uri}},
-                        {"type": "text", "text": SCENE_PROMPT},
-                    ],
-                }],
-            )
-        except Exception as e:
-            raise VisionError(f"API call failed for frame {kf.index}: {e}")
+        raw_text = None
+        for attempt in range(8):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": data_uri}},
+                            {"type": "text", "text": SCENE_PROMPT},
+                        ],
+                    }],
+                )
+                raw_text = response.choices[0].message.content
+                break
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "503" in err_str or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower() or "unavailable" in err_str.lower():
+                    wait = (attempt + 1) * 10.0
+                    print(f"  Rate limited / overloaded, retrying in {wait:.0f}s...")
+                    time.sleep(wait)
+                else:
+                    raise VisionError(f"API call failed for frame {kf.index}: {e}")
+
+        if raw_text is None:
+            raise VisionError(f"API call failed for frame {kf.index} after 5 retries")
+
+        if delay > 0:
+            time.sleep(delay)
 
         raw_text = response.choices[0].message.content
         try:

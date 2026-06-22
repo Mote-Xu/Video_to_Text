@@ -231,12 +231,14 @@ def run_pipeline(
     if not skip_vision and result.keyframes:
         # Choose the right API key based on provider
         provider = config.vision.provider
-        if provider == "deepseek":
+        if provider == "gemini":
+            api_key = config.gemini_api_key
+        elif provider == "deepseek":
             api_key = config.deepseek_api_key
         elif provider == "anthropic":
             api_key = config.anthropic_api_key
         else:
-            api_key = config.deepseek_api_key  # fallback
+            api_key = config.gemini_api_key  # fallback
 
         print(f"\n[5/5] Describing scenes (provider: {provider}, model: {config.vision.model})...")
         t0 = time.perf_counter()
