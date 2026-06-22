@@ -2,7 +2,8 @@
 PRIVATE.md
 .env
 
-# Video files (too large for git)
+# Video files
+videos/
 *.mp4
 *.mkv
 *.avi
