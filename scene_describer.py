@@ -99,12 +99,15 @@ def _describe_with_openai_compat(
     client = OpenAI(api_key=api_key, base_url=base_url)
     results: list[SceneDescription] = []
 
-    # Gemini free tier: ~5 RPM → need ~15s between requests
-    delay = 15.0 if "generativelanguage" in base_url else 0.0
+    # Gemini free tier: 5 RPM → 30s between requests (2 RPM = safe margin)
+    delay = 30.0 if "generativelanguage" in base_url else 0.0
 
+    total = len(keyframes)
     for kf in keyframes:
         if not kf.image_path.exists():
             continue
+
+        print(f"  [{len(results)}/{total}] t={kf.timestamp_sec:.0f}s...", end=" ", flush=True)
 
         # Read and resize image (smaller = faster, fewer rate limits)
         from PIL import Image
@@ -122,7 +125,7 @@ def _describe_with_openai_compat(
         data_uri = f"data:{mime};base64,{image_data}"
 
         raw_text = None
-        for attempt in range(8):
+        for attempt in range(3):
             try:
                 response = client.chat.completions.create(
                     model=model,
@@ -140,20 +143,24 @@ def _describe_with_openai_compat(
                 break
             except Exception as e:
                 err_str = str(e)
-                if "429" in err_str or "503" in err_str or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower() or "unavailable" in err_str.lower():
-                    wait = (attempt + 1) * 10.0
-                    print(f"  Rate limited / overloaded, retrying in {wait:.0f}s...")
+                if any(x in err_str.lower() for x in ["429", "503", "quota", "resource_exhausted", "unavailable"]):
+                    wait = (attempt + 1) * 30.0
+                    print(f"  Frame {kf.index} rate-limited, waiting {wait:.0f}s...")
                     time.sleep(wait)
                 else:
-                    raise VisionError(f"API call failed for frame {kf.index}: {e}")
+                    print(f"  Frame {kf.index} error: {e}")
+                    break  # non-retryable, skip this frame
 
         if raw_text is None:
-            raise VisionError(f"API call failed for frame {kf.index} after 5 retries")
+            print(f"  Frame {kf.index} skipped — all retries exhausted")
+            if delay > 0:
+                time.sleep(delay)
+            continue  # skip this frame, keep going
 
+        print("OK")
         if delay > 0:
             time.sleep(delay)
 
-        raw_text = response.choices[0].message.content
         try:
             parsed = _parse_json_response(raw_text)
         except json.JSONDecodeError:
