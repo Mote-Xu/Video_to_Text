@@ -258,13 +258,48 @@ def _describe_with_anthropic(
 
 
 def _parse_json_response(text: str) -> dict:
-    """Extract JSON object from the model's response, handling markdown wrapping."""
+    """Extract JSON object from model response, with multiple fallback strategies."""
     text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].startswith("```"):
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    return json.loads(text)
+
+    # Strategy 1: try direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: strip markdown code fences
+    if "```" in text:
+        # Find content between first ``` and last ```
+        start = text.find("```")
+        end = text.rfind("```")
+        if start != -1 and end != -1 and end > start:
+            inner = text[start + 3:end].strip()
+            # Skip optional language tag like "json"
+            nl = inner.find("\n")
+            if nl != -1 and nl < 20:
+                inner = inner[nl + 1:].strip()
+            try:
+                return json.loads(inner)
+            except json.JSONDecodeError:
+                pass
+
+    # Strategy 3: find { ... } pair
+    brace_start = text.find("{")
+    brace_end = text.rfind("}")
+    if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
+        try:
+            return json.loads(text[brace_start:brace_end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 4: fallback — treat whole text as summary
+    clean = text.strip().strip('"').strip("'")
+    if len(clean) > 300:
+        clean = clean[:300]
+    return {
+        "summary": clean,
+        "objects": [],
+        "actions": [],
+        "setting": "",
+        "on_screen_text": "",
+    }
