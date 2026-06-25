@@ -184,7 +184,19 @@ def run_pipeline(
         print(f"\n[3/5] Extracting keyframes (every {config.keyframe.interval_sec}s)...")
         t0 = time.perf_counter()
         from keyframe_extractor import extract_keyframes
-        keyframe_dir = Path(config.output.dir) / video_stem / "keyframes"
+        # Mirror videos/ date structure for keyframes
+        vp = Path(video_path)
+        try:
+            vrel = vp.resolve().relative_to(Path.cwd())
+        except ValueError:
+            vrel = vp
+        kf_parts = list(vrel.parts)
+        if kf_parts and kf_parts[0] == "videos":
+            kf_parts = kf_parts[1:]
+        if len(kf_parts) > 1:
+            keyframe_dir = Path(config.output.dir) / Path(*kf_parts[:-1]) / video_stem / "keyframes"
+        else:
+            keyframe_dir = Path(config.output.dir) / video_stem / "keyframes"
         keyframes = extract_keyframes(
             video_path,
             video_meta=video_meta,
@@ -314,9 +326,22 @@ def main() -> None:
         keep_temp=args.keep_temp,
     )
 
-    # Write outputs — one subfolder per video
+    # Write outputs — mirror videos/ date structure
     output_video_stem = result.video.path.stem
-    output_dir = Path(config.output.dir) / output_video_stem
+    video_path = Path(args.video)
+    try:
+        rel = video_path.resolve().relative_to(Path.cwd())
+    except ValueError:
+        rel = video_path
+    parts = list(rel.parts)
+    if parts and parts[0] == "videos":
+        parts = parts[1:]  # strip "videos/"
+    # Preserve date subfolder: videos/2026-06-25/vid.mp4 → outputs/2026-06-25/vid/
+    if len(parts) > 1:
+        date_prefix = Path(*parts[:-1])
+        output_dir = Path(config.output.dir) / date_prefix / output_video_stem
+    else:
+        output_dir = Path(config.output.dir) / output_video_stem
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # JSON
