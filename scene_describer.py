@@ -2,10 +2,31 @@
 
 import base64
 import json
+import subprocess
 import time
 from pathlib import Path
 
 from models import KeyFrame, SceneDescription
+
+
+def _get_windows_proxy() -> str | None:
+    """Read Windows system proxy from registry. Returns None if not set."""
+    try:
+        result = subprocess.run(
+            ["reg", "query",
+             r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+             "/v", "ProxyServer"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if "ProxyServer" in line:
+                    parts = line.strip().split()
+                    if len(parts) >= 3:
+                        return parts[-1].strip()
+    except Exception:
+        pass
+    return None
 
 
 SCENE_PROMPT = """Describe this video frame concisely. Return ONLY valid JSON (no markdown, no code block):
@@ -95,8 +116,15 @@ def _describe_with_openai_compat(
 ) -> list[SceneDescription]:
     """Describe frames via OpenAI-compatible API (DeepSeek, OpenAI, etc.)."""
     from openai import OpenAI
+    import httpx
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    # Auto-detect Windows proxy (e.g. 127.0.0.1:24072)
+    proxy_url = _get_windows_proxy()
+    http_client = None
+    if proxy_url:
+        http_client = httpx.Client(proxy=f"http://{proxy_url}", timeout=120)
+
+    client = OpenAI(api_key=api_key, base_url=base_url, http_client=http_client)
     results: list[SceneDescription] = []
 
     # Gemini free tier: 5 RPM → 30s between requests (2 RPM = safe margin)

@@ -151,6 +151,7 @@ def run_pipeline(
     print(f"  Resolution: {video_meta.width}x{video_meta.height} | "
           f"Duration: {video_meta.duration_sec:.1f}s | FPS: {video_meta.fps:.1f}")
     print(f"  Has audio: {video_meta.has_audio}")
+    video_stem = video_meta.path.stem
 
     # -- Phase 1: Extract audio --
     if not skip_asr and video_meta.has_audio:
@@ -171,8 +172,6 @@ def run_pipeline(
         skip_asr = True  # can't transcribe without audio
 
     # -- Phase 2: Extract keyframes --
-    video_stem = video_meta.path.stem
-
     if not skip_ocr or not skip_vision:
         print(f"\n[3/5] Extracting keyframes (every {config.keyframe.interval_sec}s)...")
         t0 = time.perf_counter()
