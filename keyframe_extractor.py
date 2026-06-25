@@ -1,4 +1,4 @@
-"""Extract keyframes from video using ffmpeg — interval or scene-detection mode."""
+"""Extract keyframes from video using ffmpeg — interval, scene-detection, or smart text-aware mode."""
 
 import re
 import subprocess
@@ -6,6 +6,9 @@ import shutil
 from pathlib import Path
 
 from models import KeyFrame, VideoMeta
+
+# Cache EasyOCR reader for smart mode
+_smart_ocr = None
 
 
 class KeyFrameError(Exception):
@@ -54,7 +57,11 @@ def extract_keyframes(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if mode == "scene":
+    if mode == "smart":
+        return _extract_smart_frames(
+            video_path, output_dir, image_format, quality, max_keyframes,
+        )
+    elif mode == "scene":
         return _extract_scene_frames(
             video_path, video_meta, output_dir, image_format,
             quality, scene_threshold, max_keyframes,
@@ -173,6 +180,97 @@ def _extract_scene_frames(
             ))
 
     return keyframes
+
+
+def _extract_smart_frames(
+    video_path: Path,
+    output_dir: Path,
+    image_format: str,
+    quality: int,
+    max_keyframes: int,
+) -> list[KeyFrame]:
+    """Extract frames at dense intervals, keep only those with text content changes."""
+    global _smart_ocr
+
+    # Phase 1: extract frames every 2 seconds
+    temp_dir = output_dir / "_smart_temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(video_path),
+        "-vf", "fps=1/2",
+        "-q:v", str(quality_to_qscale(quality)),
+        "-frames:v", str(max_keyframes),
+        "-loglevel", "error",
+        str(temp_dir / f"temp_%06d.{image_format}"),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    if result.returncode != 0:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise KeyFrameError(f"ffmpeg failed:\n{result.stderr}")
+
+    frame_paths = sorted(temp_dir.glob(f"temp_*.{image_format}"))
+    if not frame_paths:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return []
+
+    # Phase 2: load EasyOCR once
+    if _smart_ocr is None:
+        import easyocr
+        _smart_ocr = easyocr.Reader(["ch_sim", "en"], gpu=False, verbose=False)
+
+    # Phase 3: OCR each frame, keep only frames with significant text change
+    kept: list[KeyFrame] = []
+    last_texts: set[str] = set()
+
+    for idx, fp in enumerate(frame_paths):
+        ts = idx * 2  # 2-second interval
+
+        try:
+            detections = _smart_ocr.readtext(str(fp))
+        except Exception:
+            continue
+
+        current_texts: set[str] = set()
+        for _, text, conf in detections:
+            if conf >= 0.4 and text.strip():
+                current_texts.add(text.strip())
+
+        # Skip frames with no text
+        if not current_texts:
+            continue
+
+        # Compare with last kept frame
+        if last_texts:
+            intersection = current_texts & last_texts
+            union = current_texts | last_texts
+            similarity = len(intersection) / len(union) if union else 0
+
+            # Keep only if text changed significantly (< 40% overlap)
+            if similarity >= 0.4:
+                continue
+
+        # Move from temp to final location
+        final_name = f"{video_path.stem}_frame_{len(kept) + 1:06d}.{image_format}"
+        final_path = output_dir / final_name
+        fp.rename(final_path)
+
+        kept.append(KeyFrame(
+            index=len(kept) + 1,
+            timestamp_sec=round(ts, 3),
+            image_path=final_path,
+        ))
+        last_texts = current_texts
+
+        if len(kept) >= max_keyframes:
+            break
+
+    # Cleanup temp
+    shutil.rmtree(temp_dir, ignore_errors=True)
+
+    print(f"  Smart detection: {len(frame_paths)} raw → {len(kept)} unique text frames")
+    return kept
 
 
 def quality_to_qscale(quality: int) -> int:

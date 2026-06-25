@@ -66,7 +66,7 @@ Examples:
     # Keyframes
     p.add_argument("--interval", type=float, default=None,
                    help="Seconds between keyframes (interval mode).")
-    p.add_argument("--scene-mode", type=str, choices=["interval", "scene"], default=None,
+    p.add_argument("--scene-mode", type=str, choices=["interval", "scene", "smart"], default=None,
                    help="Keyframe extraction mode.")
     p.add_argument("--scene-threshold", type=float, default=None,
                    help="Scene detection sensitivity (0.1-0.5, default 0.3).")

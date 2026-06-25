@@ -21,8 +21,7 @@ for i, v in enumerate(videos, 1):
             "--language", "zh",
             "--device", "cpu",
             "--skip-vision",
-            "--scene-mode", "scene",
-            "--scene-threshold", "0.5",
+            "--scene-mode", "smart",
         ],
         capture_output=False,  # show progress
         timeout=600,
