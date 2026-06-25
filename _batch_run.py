@@ -18,10 +18,10 @@ for i, v in enumerate(videos, 1):
         [
             sys.executable, "main.py",
             str(v),
+            "--interval", "8",
             "--language", "zh",
             "--device", "cpu",
             "--skip-vision",
-            "--scene-mode", "smart",
         ],
         capture_output=False,  # show progress
         timeout=600,

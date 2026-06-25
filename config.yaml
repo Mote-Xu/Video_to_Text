@@ -19,7 +19,7 @@ asr:
 
 # Keyframe extraction
 keyframe:
-  mode: smart               # "interval" / "scene" / "smart" (text-change-aware)
+  mode: interval            # "interval" / "scene" / "smart" (text-change-aware)
   interval_sec: 5.0         # for "interval" mode: seconds between frames
   scene_threshold: 0.5      # for "scene" mode: 0.1 (sensitive) ~ 0.5 (strict)
   format: jpg
