@@ -34,7 +34,7 @@ class AsrConfig(BaseModel):
 class KeyFrameConfig(BaseModel):
     mode: str = "scene"               # "interval" or "scene"
     interval_sec: float = 5.0         # for "interval" mode
-    scene_threshold: float = 0.3      # for "scene" mode: 0.1-0.5
+    scene_threshold: float = 0.5      # for "scene" mode: 0.1-0.5
     format: str = "jpg"
     quality: int = 90
     max_keyframes: int = 500
