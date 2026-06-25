@@ -171,14 +171,18 @@ def run_pipeline(
         skip_asr = True  # can't transcribe without audio
 
     # -- Phase 2: Extract keyframes --
+    video_stem = video_meta.path.stem
+
     if not skip_ocr or not skip_vision:
         print(f"\n[3/5] Extracting keyframes (every {config.keyframe.interval_sec}s)...")
         t0 = time.perf_counter()
         from keyframe_extractor import extract_keyframes
+        keyframe_dir = Path(config.output.dir) / video_stem / "keyframes"
         keyframes = extract_keyframes(
             video_path,
             video_meta=video_meta,
             interval_sec=config.keyframe.interval_sec,
+            output_dir=keyframe_dir,
             image_format=config.keyframe.format,
             quality=config.keyframe.quality,
             max_keyframes=config.keyframe.max_keyframes,
@@ -301,32 +305,30 @@ def main() -> None:
         keep_temp=args.keep_temp,
     )
 
-    # Write outputs
-    output_dir = Path(config.output.dir)
+    # Write outputs — one subfolder per video
+    output_dir = Path(config.output.dir) / video_stem
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    video_stem = result.video.path.stem
 
     # JSON
     if not args.no_json:
-        json_path = output_dir / f"{video_stem}_report.json"
+        json_path = output_dir / "report.json"
         from output_writer import write_json
         write_json(result, json_path)
-        print(f"  JSON report: {json_path}")
+        print(f"  JSON: {json_path}")
 
     # Markdown
     if not args.no_markdown:
-        md_path = output_dir / f"{video_stem}_report.md"
+        md_path = output_dir / "report.md"
         from output_writer import write_markdown
         write_markdown(result, md_path)
-        print(f"  Markdown report: {md_path}")
+        print(f"  Markdown: {md_path}")
 
     # SRT
     if args.srt and result.transcript:
-        srt_path = output_dir / f"{video_stem}_transcript.srt"
+        srt_path = output_dir / "transcript.srt"
         from output_writer import write_srt
         write_srt(result, srt_path, config.output.srt_max_chars_per_line)
-        print(f"  SRT subtitles: {srt_path}")
+        print(f"  SRT: {srt_path}")
 
     # Cleanup temp
     if not args.keep_temp:
