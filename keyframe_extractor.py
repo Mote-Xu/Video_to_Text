@@ -5,6 +5,9 @@ import subprocess
 import shutil
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
+
 from models import KeyFrame, VideoMeta
 
 # Cache EasyOCR reader for smart mode
@@ -228,7 +231,10 @@ def _extract_smart_frames(
         ts = idx * 2  # 2-second interval
 
         try:
-            detections = _smart_ocr.readtext(str(fp))
+            # Use PIL to avoid OpenCV Unicode path issues on Windows
+            img = Image.open(fp).convert("RGB")
+            img_np = np.array(img)
+            detections = _smart_ocr.readtext(img_np)
         except Exception:
             continue
 
