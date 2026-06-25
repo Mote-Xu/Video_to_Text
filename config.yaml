@@ -19,10 +19,12 @@ asr:
 
 # Keyframe extraction
 keyframe:
-  interval_sec: 5.0         # extract one frame every N seconds
+  mode: scene               # "interval" or "scene" (detect visual changes)
+  interval_sec: 5.0         # for "interval" mode: seconds between frames
+  scene_threshold: 0.3      # for "scene" mode: 0.1 (sensitive) ~ 0.5 (strict)
   format: jpg
   quality: 90
-  max_keyframes: 2000
+  max_keyframes: 500
 
 # OCR settings
 ocr:

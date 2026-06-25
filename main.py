@@ -65,7 +65,11 @@ Examples:
 
     # Keyframes
     p.add_argument("--interval", type=float, default=None,
-                   help="Seconds between keyframes (default: 5.0).")
+                   help="Seconds between keyframes (interval mode).")
+    p.add_argument("--scene-mode", type=str, choices=["interval", "scene"], default=None,
+                   help="Keyframe extraction mode.")
+    p.add_argument("--scene-threshold", type=float, default=None,
+                   help="Scene detection sensitivity (0.1-0.5, default 0.3).")
 
     # OCR
     p.add_argument("--ocr-gpu", action="store_true", default=None,
@@ -105,6 +109,10 @@ def _build_overrides(args: argparse.Namespace) -> dict:
         overrides["asr.device"] = args.device
     if args.interval is not None:
         overrides["keyframe.interval_sec"] = args.interval
+    if args.scene_mode is not None:
+        overrides["keyframe.mode"] = args.scene_mode
+    if args.scene_threshold is not None:
+        overrides["keyframe.scene_threshold"] = args.scene_threshold
     if args.ocr_gpu is not None:
         overrides["ocr.use_gpu"] = True
     if args.ocr_lang is not None:
@@ -180,7 +188,9 @@ def run_pipeline(
         keyframes = extract_keyframes(
             video_path,
             video_meta=video_meta,
+            mode=config.keyframe.mode,
             interval_sec=config.keyframe.interval_sec,
+            scene_threshold=config.keyframe.scene_threshold,
             output_dir=keyframe_dir,
             image_format=config.keyframe.format,
             quality=config.keyframe.quality,
