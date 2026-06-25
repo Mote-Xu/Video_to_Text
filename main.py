@@ -305,7 +305,8 @@ def main() -> None:
     )
 
     # Write outputs — one subfolder per video
-    output_dir = Path(config.output.dir) / video_stem
+    output_video_stem = result.video.path.stem
+    output_dir = Path(config.output.dir) / output_video_stem
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # JSON
