@@ -19,7 +19,7 @@ for i, v in enumerate(videos, 1):
             sys.executable, "main.py",
             str(v),
             "--model", "tiny",
-            "--interval", "8",
+            "--interval", "30",
             "--language", "zh",
             "--device", "cpu",
             "--skip-asr",
