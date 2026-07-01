@@ -22,6 +22,7 @@ for i, v in enumerate(videos, 1):
             "--interval", "8",
             "--language", "zh",
             "--device", "cpu",
+            "--skip-asr",
         ],
         capture_output=False,
         timeout=600,
