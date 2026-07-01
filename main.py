@@ -162,17 +162,23 @@ def run_pipeline(
     video_stem = video_meta.path.stem
 
     # -- Phase 1: Extract audio --
+    audio_path = None
     if not skip_asr and video_meta.has_audio:
         print(f"\n[2/5] Extracting audio...")
         t0 = time.perf_counter()
         from audio_extractor import extract_audio
-        audio_path = extract_audio(
-            video_path,
-            sample_rate=config.video.sample_rate,
-            channels=config.video.channels,
-        )
-        stats.audio_extraction_sec = round(time.perf_counter() - t0, 2)
-        print(f"  Audio: {audio_path} ({stats.audio_extraction_sec}s)")
+        try:
+            audio_path = extract_audio(
+                video_path,
+                sample_rate=config.video.sample_rate,
+                channels=config.video.channels,
+            )
+            stats.audio_extraction_sec = round(time.perf_counter() - t0, 2)
+            print(f"  Audio: {audio_path} ({stats.audio_extraction_sec}s)")
+        except Exception as e:
+            print(f"  Audio extraction FAILED: {e}")
+            result.errors.append(f"Audio: {e}")
+            skip_asr = True
     elif skip_asr:
         print(f"\n[2/5] Audio extraction: SKIPPED")
     else:
@@ -215,7 +221,7 @@ def run_pipeline(
         print(f"\n[3/5] Keyframe extraction: SKIPPED")
 
     # -- Phase 3: ASR transcription --
-    if not skip_asr and video_meta.has_audio:
+    if not skip_asr and video_meta.has_audio and audio_path:
         print(f"\n[4/5] Transcribing (model: {config.asr.model_size}, device: {config.asr.device})...")
         t0 = time.perf_counter()
         from transcriber import transcribe
