@@ -35,8 +35,8 @@ ocr:
 
 # Vision / scene description
 vision:
-  provider: gemini          # gemini | deepseek | anthropic | openai
-  model: gemini-2.5-flash
+  provider: dashscope       # dashscope | gemini | deepseek | anthropic | openai
+  model: qwen-vl-max
   max_tokens: 200
   temperature: 0.3
   batch_size: 1

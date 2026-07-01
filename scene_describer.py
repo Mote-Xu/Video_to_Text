@@ -41,6 +41,10 @@ SCENE_PROMPT = """Describe this video frame concisely. Return ONLY valid JSON (n
 
 # Provider configs: {name: (base_url, env_var_hint)}
 PROVIDERS = {
+    "dashscope": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "env_var": "DASHSCOPE_API_KEY",
+    },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "env_var": "GEMINI_API_KEY",
