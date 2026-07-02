@@ -176,8 +176,11 @@ def run_pipeline(
             stats.audio_extraction_sec = round(time.perf_counter() - t0, 2)
             print(f"  Audio: {audio_path} ({stats.audio_extraction_sec}s)")
         except Exception as e:
-            print(f"  Audio extraction FAILED: {e}")
-            result.errors.append(f"Audio: {e}")
+            err_msg = str(e)
+            if len(err_msg) > 500:
+                err_msg = err_msg[:500] + "..."
+            print(f"  Audio extraction FAILED: {err_msg[:120]}...")
+            result.errors.append(f"Audio: {err_msg}")
             skip_asr = True
     elif skip_asr:
         print(f"\n[2/5] Audio extraction: SKIPPED")
