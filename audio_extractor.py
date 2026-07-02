@@ -111,12 +111,15 @@ def extract_audio(
         output_path = Path(output_path)
 
     # ffmpeg: discard video, force mono, resample, output WAV
+    # Use pcm_s16le codec + ignore_err for screen recordings with broken AAC
     cmd = [
         "ffmpeg", "-y",
+        "-err_detect", "ignore_err",
         "-i", str(video_path),
         "-vn",                        # no video
         "-ac", str(channels),         # audio channels
         "-ar", str(sample_rate),      # sample rate
+        "-c:a", "pcm_s16le",
         "-f", "wav",
         "-loglevel", "error",
         str(output_path),
