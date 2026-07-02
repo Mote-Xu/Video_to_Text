@@ -29,14 +29,14 @@ def _get_windows_proxy() -> str | None:
     return None
 
 
-SCENE_PROMPT = """Describe this video frame concisely. Return ONLY valid JSON (no markdown, no code block):
+SCENE_PROMPT = """You are analyzing frames from a stock trading tutorial video. Describe what you see with focus on trading-specific details. Return ONLY valid JSON (no markdown):
 
 {
-  "summary": "1-2 sentence description of what is happening in the frame",
-  "objects": ["visible object 1", "visible object 2"],
-  "actions": ["action or activity visible"],
-  "setting": "indoor/outdoor and location type",
-  "on_screen_text": "any visible text in the frame (or empty string if none)"
+  "summary": "Describe the key trading patterns visible: any MA crossovers, MACD golden/death cross, KDJ signals, candlestick patterns, volume spikes, support/resistance levels, or trend changes. Be specific.",
+  "objects": ["chart elements visible: candlesticks, MA lines, MACD, KDJ, volume bars, price labels"],
+  "actions": ["what is happening in this frame: e.g. price breaking out, indicator crossing, teacher pointing at chart"],
+  "setting": "trading platform or presentation slide",
+  "on_screen_text": "key numbers/stocks/indicators visible (stock codes, prices, indicator values, timeframes)"
 }"""
 
 # Provider configs: {name: (base_url, env_var_hint)}
