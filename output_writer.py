@@ -89,7 +89,7 @@ def write_json(result: PipelineResult, output_path: Path) -> None:
 
 
 def write_markdown(result: PipelineResult, output_path: Path) -> None:
-    """Write a human-readable Markdown report."""
+    """Write a human-readable Markdown report — timeline format."""
     lines: list[str] = []
     v = result.video
 
@@ -113,24 +113,19 @@ def write_markdown(result: PipelineResult, output_path: Path) -> None:
             lines.append(f"- {err}")
         lines.append("")
 
-    # -- Transcript --
-    lines.append("---")
-    lines.append("")
-    lines.append("## 📝 Transcript")
-    lines.append("")
-    if result.transcript:
-        lines.append("| Start | End | Text |")
-        lines.append("|-------|-----|------|")
-        for t in result.transcript:
-            lines.append(f"| {_format_time(t.start_sec)} | {_format_time(t.end_sec)} | {t.text} |")
-    else:
-        lines.append("*No transcript (audio may be missing).*")
-    lines.append("")
+    # -- Build timeline: one entry per scene description frame --
+    # Group OCR by frame_index
+    ocr_by_frame: dict[int, list[str]] = {}
+    for r in result.ocr_results:
+        ocr_by_frame.setdefault(r.frame_index, []).append(r.text)
 
-    # -- Scene Analysis --
+    # Find overlapping transcript segments for each scene frame
+    transcript = result.transcript or []
+    t_idx = 0  # cursor into transcript list
+
     lines.append("---")
     lines.append("")
-    lines.append("## 🎬 Scene Analysis")
+    lines.append("## 📖 Timeline")
     lines.append("")
 
     if result.scene_descriptions:
@@ -139,56 +134,65 @@ def write_markdown(result: PipelineResult, output_path: Path) -> None:
             lines.append(f"### {ts} — Frame {sd.frame_index}")
             lines.append("")
 
-            # Summary
+            # Scene description
             if sd.summary:
-                lines.append(f"**Summary**: {sd.summary}")
+                lines.append(f"**画面**: {sd.summary}")
                 lines.append("")
 
-            # Setting
-            if sd.setting:
-                lines.append(f"**Setting**: {sd.setting}")
-                lines.append("")
+            # Find transcript segments that fall within ±30s of this frame
+            frame_ts = sd.timestamp_sec
+            relevant_transcript: list[str] = []
+            while t_idx < len(transcript) and transcript[t_idx].end_sec < frame_ts - 30:
+                t_idx += 1  # skip old segments
+            temp_idx = t_idx
+            while temp_idx < len(transcript) and transcript[temp_idx].start_sec < frame_ts + 30:
+                seg = transcript[temp_idx]
+                if seg.end_sec >= frame_ts - 30:
+                    seg_start = _format_time(seg.start_sec)
+                    relevant_transcript.append(f"[{seg_start}] {seg.text}")
+                temp_idx += 1
 
-            # Objects
-            if sd.objects:
-                lines.append(f"**Objects**: {', '.join(sd.objects)}")
+            if relevant_transcript:
+                lines.append("**同期讲解**:")
                 lines.append("")
-
-            # Actions
-            if sd.actions:
-                lines.append(f"**Actions**: {', '.join(sd.actions)}")
+                combined = " ".join(relevant_transcript)
+                # Wrap at ~120 chars
+                while len(combined) > 120:
+                    br = combined.rfind(" ", 0, 120)
+                    if br < 60:
+                        br = 120
+                    lines.append(f"> {combined[:br].strip()}")
+                    combined = combined[br:].strip()
+                if combined:
+                    lines.append(f"> {combined}")
                 lines.append("")
 
             # OCR text at this frame
-            frame_ocr = [r for r in result.ocr_results if r.frame_index == sd.frame_index]
+            frame_ocr = ocr_by_frame.get(sd.frame_index, [])
             if frame_ocr:
-                lines.append("**OCR Text**:")
-                for ocr_item in frame_ocr:
-                    lines.append(f"- \"{ocr_item.text}\" (conf: {ocr_item.confidence})")
-                lines.append("")
-
-            # Vision-reported on-screen text
-            if sd.on_screen_text:
-                lines.append(f"**On-screen text (vision)**: {sd.on_screen_text}")
+                lines.append("**屏幕文字**:")
+                for txt in frame_ocr[:10]:
+                    lines.append(f"- {txt}")
+                if len(frame_ocr) > 10:
+                    lines.append(f"- ...等 {len(frame_ocr)} 条")
                 lines.append("")
 
             lines.append("---")
             lines.append("")
     else:
-        # No scene descriptions — still show OCR results with timestamps
-        lines.append("*No scene descriptions (vision API may have been skipped).*")
+        lines.append("*No scene descriptions.*")
         lines.append("")
-        if result.ocr_results:
-            lines.append("## 🔤 OCR Text")
-            lines.append("")
-            lines.append("| Timestamp | Frame | Text | Confidence |")
-            lines.append("|-----------|-------|------|------------|")
-            for r in result.ocr_results:
-                lines.append(
-                    f"| {_format_time(r.timestamp_sec)} | {r.frame_index} | "
-                    f"{r.text} | {r.confidence} |"
-                )
-            lines.append("")
+
+    # -- Show any remaining transcript (after last frame) --
+    remaining = [t for t in transcript if t.start_sec > (result.scene_descriptions[-1].timestamp_sec + 30 if result.scene_descriptions else 0)]
+    if remaining:
+        lines.append("### 📝 后续讲解")
+        lines.append("")
+        lines.append("| Start | End | Text |")
+        lines.append("|-------|-----|------|")
+        for t in remaining:
+            lines.append(f"| {_format_time(t.start_sec)} | {_format_time(t.end_sec)} | {t.text} |")
+        lines.append("")
 
     # -- Stats --
     lines.append("## 📊 Processing Stats")
