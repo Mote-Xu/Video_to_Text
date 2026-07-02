@@ -1,11 +1,17 @@
-"""Batch process stock videos with scene description (Qwen-VL)."""
-import subprocess, sys, time
+"""Batch re-process all stock videos with small model + fixed parser + AAC fix."""
+import subprocess, sys, time, shutil
 from pathlib import Path
 
 video_dir = Path("videos/2026-07-01")
 videos = sorted(video_dir.glob("*.mp4"))
 
-print(f"Found {len(videos)} videos\n")
+# Clean old outputs
+for v in videos:
+    out = Path("outputs/2026-07-01") / v.stem
+    if out.exists():
+        shutil.rmtree(out)
+
+print(f"Processing {len(videos)} videos\n")
 failed = []
 
 for i, v in enumerate(videos, 1):
@@ -18,14 +24,13 @@ for i, v in enumerate(videos, 1):
         [
             sys.executable, "main.py",
             str(v),
-            "--model", "tiny",
-            "--interval", "30",
+            "--model", "small",
+            "--interval", "60",
             "--language", "zh",
             "--device", "cpu",
-            "--skip-asr",
         ],
         capture_output=False,
-        timeout=600,
+        timeout=900,
     )
 
     elapsed = time.perf_counter() - start

@@ -290,23 +290,36 @@ def _describe_with_anthropic(
 
 
 def _parse_json_response(text: str) -> dict:
-    """Extract JSON object from model response, with multiple fallback strategies."""
+    """Extract JSON from model response, handling truncation gracefully."""
     text = text.strip()
 
-    # Strategy 1: try direct parse
+    # Strategy 1: direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Strategy 2: strip markdown code fences
+    # Strategy 2: find balanced { ... } pair (handles truncation)
+    depth = 0
+    json_start = text.find("{")
+    if json_start != -1:
+        for i in range(json_start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[json_start:i + 1])
+                    except json.JSONDecodeError:
+                        break
+
+    # Strategy 3: strip markdown code fences and retry
     if "```" in text:
-        # Find content between first ``` and last ```
         start = text.find("```")
         end = text.rfind("```")
-        if start != -1 and end != -1 and end > start:
+        if start != -1 and end != -1 and end > start + 3:
             inner = text[start + 3:end].strip()
-            # Skip optional language tag like "json"
             nl = inner.find("\n")
             if nl != -1 and nl < 20:
                 inner = inner[nl + 1:].strip()
@@ -315,23 +328,21 @@ def _parse_json_response(text: str) -> dict:
             except json.JSONDecodeError:
                 pass
 
-    # Strategy 3: find { ... } pair
-    brace_start = text.find("{")
-    brace_end = text.rfind("}")
-    if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
-        try:
-            return json.loads(text[brace_start:brace_end + 1])
-        except json.JSONDecodeError:
-            pass
+    # Strategy 4: manually extract summary from truncated JSON
+    import re
+    summary_match = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    summary = summary_match.group(1) if summary_match else text[:300]
+    # Fix escaped chars
+    summary = summary.replace('\\"', '"').replace('\\n', ' ')
 
-    # Strategy 4: fallback — treat whole text as summary
-    clean = text.strip().strip('"').strip("'")
-    if len(clean) > 300:
-        clean = clean[:300]
+    text_match = re.search(r'"on_screen_text"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    on_screen = text_match.group(1) if text_match else ""
+    on_screen = on_screen.replace('\\"', '"')
+
     return {
-        "summary": clean,
+        "summary": summary,
         "objects": [],
         "actions": [],
         "setting": "",
-        "on_screen_text": "",
+        "on_screen_text": on_screen,
     }
