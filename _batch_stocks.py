@@ -30,7 +30,7 @@ for i, v in enumerate(videos, 1):
             "--device", "cpu",
         ],
         capture_output=False,
-        timeout=900,
+        timeout=3600,
     )
 
     elapsed = time.perf_counter() - start
