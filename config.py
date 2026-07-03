@@ -29,6 +29,7 @@ class AsrConfig(BaseModel):
     beam_size: int = 5
     vad_filter: bool = True
     word_timestamps: bool = True
+    fix_errors: bool = True            # LLM post-process to fix homophone errors
 
 
 class KeyFrameConfig(BaseModel):

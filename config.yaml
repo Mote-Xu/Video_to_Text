@@ -16,6 +16,7 @@ asr:
   beam_size: 5
   vad_filter: true
   word_timestamps: true
+  fix_errors: true          # post-process with LLM to fix homophone errors
 
 # Keyframe extraction
 keyframe:

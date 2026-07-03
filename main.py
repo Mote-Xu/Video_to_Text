@@ -241,6 +241,15 @@ def run_pipeline(
         stats.asr_transcription_sec = round(time.perf_counter() - t0, 2)
         result.transcript = transcript
         print(f"  Transcript: {len(transcript)} segments ({stats.asr_transcription_sec}s)")
+
+        # Post-process: fix homophone errors
+        if config.asr.fix_errors and config.deepseek_api_key:
+            print(f"  Fixing typos with LLM...")
+            t_fix = time.perf_counter()
+            from transcript_fixer import fix_transcript
+            fixed = fix_transcript(transcript, config.deepseek_api_key)
+            result.transcript = fixed
+            print(f"  Fixed in {time.perf_counter() - t_fix:.1f}s")
     else:
         print(f"\n[4/5] ASR transcription: SKIPPED")
 
