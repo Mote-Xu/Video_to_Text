@@ -346,11 +346,9 @@ def main() -> None:
         keep_temp=args.keep_temp,
     )
 
-    # Write outputs — mirror videos/ date structure, never overwrite
+    # Write outputs — mirror videos/ date structure
     output_video_stem = result.video.path.stem
     video_path = Path(args.video)
-    import datetime
-    run_ts = datetime.datetime.now().strftime("%H%M%S")
     try:
         rel = video_path.resolve().relative_to(Path.cwd())
     except ValueError:
@@ -366,25 +364,19 @@ def main() -> None:
         output_dir = Path(config.output.dir) / output_video_stem
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # JSON — timestamped to never overwrite
+    # JSON
     if not args.no_json:
-        json_path = output_dir / f"report_{run_ts}.json"
+        json_path = output_dir / "report.json"
         from output_writer import write_json
         write_json(result, json_path)
-        # Also save as latest
-        latest_json = output_dir / "report.json"
-        import shutil as _shutil
-        _shutil.copy2(json_path, latest_json)
-        print(f"  JSON: {latest_json}")
+        print(f"  JSON: {json_path}")
 
     # Markdown
     if not args.no_markdown:
-        md_path = output_dir / f"report_{run_ts}.md"
+        md_path = output_dir / "report.md"
         from output_writer import write_markdown
         write_markdown(result, md_path)
-        latest_md = output_dir / "report.md"
-        _shutil.copy2(md_path, latest_md)
-        print(f"  Markdown: {latest_md}")
+        print(f"  Markdown: {md_path}")
 
     # SRT
     if args.srt and result.transcript:
