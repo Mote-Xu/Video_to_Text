@@ -110,49 +110,50 @@ def extract_audio(
     else:
         output_path = Path(output_path)
 
-    # Try multiple strategies for stubborn audio streams
-    strategies = [
-        # Strategy 1: pcm_s16le with error ignoring
-        [
-            "ffmpeg", "-y",
-            "-err_detect", "ignore_err",
-            "-i", str(video_path),
-            "-vn", "-ac", str(channels), "-ar", str(sample_rate),
-            "-c:a", "pcm_s16le", "-f", "wav",
-            "-loglevel", "error",
-            str(output_path),
-        ],
-        # Strategy 2: raw copy AAC then re-encode via pipe
-        [
-            "ffmpeg", "-y",
-            "-err_detect", "ignore_err",
-            "-fflags", "+genpts+discardcorrupt",
-            "-i", str(video_path),
-            "-vn", "-ac", str(channels), "-ar", str(sample_rate),
-            "-c:a", "pcm_s16le", "-f", "wav",
-            "-loglevel", "error",
-            str(output_path),
-        ],
-        # Strategy 3: copy AAC stream + re-encode separately
-        [
-            "ffmpeg", "-y",
-            "-err_detect", "ignore_err",
-            "-i", str(video_path),
-            "-vn", "-ac", str(channels), "-ar", str(sample_rate),
-            "-c:a", "aac", "-strict", "experimental",
-            "-f", "wav",
-            "-loglevel", "error",
-            str(output_path),
-        ],
-    ]
+    # Strategy 0: Extract raw AAC, then convert (handles partially corrupt streams)
+    raw_aac = output_path.with_suffix(".aac")
+    raw_result = subprocess.run(
+        ["ffmpeg", "-y", "-err_detect", "ignore_err",
+         "-i", str(video_path), "-vn", "-acodec", "copy",
+         "-loglevel", "error", str(raw_aac)],
+        capture_output=True, text=True, timeout=300,
+    )
+    if raw_result.returncode == 0 and raw_aac.exists() and raw_aac.stat().st_size > 0:
+        # Convert raw AAC to WAV — accept partial success
+        wav_result = subprocess.run(
+            ["ffmpeg", "-y", "-err_detect", "ignore_err",
+             "-i", str(raw_aac), "-ac", str(channels), "-ar", str(sample_rate),
+             "-c:a", "pcm_s16le", "-f", "wav",
+             "-loglevel", "error", str(output_path)],
+            capture_output=True, text=True, timeout=300,
+        )
+        raw_aac.unlink(missing_ok=True)
+        if output_path.exists() and output_path.stat().st_size > 0:
+            return output_path  # partial is better than nothing
 
-    last_error = ""
-    for i, cmd in enumerate(strategies):
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
-            return output_path
-        last_error = result.stderr[:500]
+    # Strategy 1: pcm_s16le with error ignoring
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-err_detect", "ignore_err",
+         "-i", str(video_path), "-vn", "-ac", str(channels), "-ar", str(sample_rate),
+         "-c:a", "pcm_s16le", "-f", "wav",
+         "-loglevel", "error", str(output_path)],
+        capture_output=True, text=True, timeout=300,
+    )
+    if result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
+        return output_path
+
+    # Strategy 2: with corrupt frame discarding
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-err_detect", "ignore_err",
+         "-fflags", "+genpts+discardcorrupt",
+         "-i", str(video_path), "-vn", "-ac", str(channels), "-ar", str(sample_rate),
+         "-c:a", "pcm_s16le", "-f", "wav",
+         "-loglevel", "error", str(output_path)],
+        capture_output=True, text=True, timeout=300,
+    )
+    if result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
+        return output_path
 
     raise AudioExtractionError(
-        f"All audio extraction strategies failed:\n{last_error}"
+        f"All audio extraction strategies failed:\n{result.stderr[:500]}"
     )
