@@ -320,6 +320,8 @@ def classify_from_transcript(
             messages=[{"role": "user", "content": f"{CLASSIFY_PROMPT}\n\n{samples_text}"}],
         )
         raw = response.choices[0].message.content
+        if not raw:
+            return None
         # Extract JSON
         raw = raw.strip()
         if "```" in raw:

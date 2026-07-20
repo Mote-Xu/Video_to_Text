@@ -156,6 +156,11 @@ def fix_transcript(
             fixed.extend(batch)
             continue
 
+        # Guard against None content (API edge case)
+        if not raw:
+            fixed.extend(batch)
+            continue
+
         # Parse corrected segments
         corrected_lines: dict[int, str] = {}
         for line in raw.splitlines():
