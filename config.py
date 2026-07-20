@@ -21,7 +21,7 @@ class AudioConfig(BaseModel):
 
 
 class AsrConfig(BaseModel):
-    engine: str = "faster-whisper"
+    engine: str = "faster-whisper"      # "faster-whisper" | "dashscope"
     model_size: str = "small"          # tiny / base / small / medium
     device: str = "cuda"
     compute_type: str = "float16"      # float16 / int8_float16
@@ -30,6 +30,7 @@ class AsrConfig(BaseModel):
     vad_filter: bool = True
     word_timestamps: bool = True
     fix_errors: bool = True            # LLM post-process to fix homophone errors
+    dashscope_model: str = "paraformer-v2"  # DashScope ASR model
 
 
 class KeyFrameConfig(BaseModel):
@@ -56,6 +57,18 @@ class VisionConfig(BaseModel):
     batch_size: int = 1                # frames per API call
 
 
+class BilibiliConfig(BaseModel):
+    enabled: bool = True
+    api_timeout: int = 10
+
+
+class ContentAnalysisConfig(BaseModel):
+    enabled: bool = True
+    bilibili: BilibiliConfig = Field(default_factory=BilibiliConfig)
+    local_fallback: bool = True
+    max_segments_preview: int = 3
+
+
 class OutputConfig(BaseModel):
     dir: str = "./outputs"
     formats: list[str] = ["json", "markdown"]
@@ -68,6 +81,7 @@ class PipelineConfig(BaseModel):
     keyframe: KeyFrameConfig = Field(default_factory=KeyFrameConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
+    content_analysis: ContentAnalysisConfig = Field(default_factory=ContentAnalysisConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
 
     # Secrets (loaded from .env)
@@ -124,6 +138,7 @@ def load_config(
         "keyframe": (yaml_data.get("keyframe") or {}),
         "ocr": (yaml_data.get("ocr") or {}),
         "vision": (yaml_data.get("vision") or {}),
+        "content_analysis": (yaml_data.get("content_analysis") or {}),
         "output": (yaml_data.get("output") or {}),
         "dashscope_api_key": env_data.get("dashscope_api_key", ""),
         "gemini_api_key": env_data.get("gemini_api_key", ""),

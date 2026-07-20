@@ -97,7 +97,7 @@ def _extract_interval_frames(
         str(output_dir / f"{video_path.stem}_frame_%06d.{image_format}"),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=600)
     if result.returncode != 0:
         raise KeyFrameError(f"ffmpeg failed:\n{result.stderr}")
 
@@ -137,7 +137,7 @@ def _extract_scene_frames(
         "-",
     ]
 
-    result = subprocess.run(cmd_detect, capture_output=True, text=True, timeout=600)
+    result = subprocess.run(cmd_detect, capture_output=True, text=True, encoding="utf-8", timeout=600)
     # ffmpeg writes showinfo to stderr; non-zero exit is ok for null output
 
     # Parse pts_time values from showinfo lines
@@ -173,7 +173,7 @@ def _extract_scene_frames(
             "-loglevel", "error",
             str(out_path),
         ]
-        subprocess.run(cmd, capture_output=True, timeout=60)
+        subprocess.run(cmd, capture_output=True, encoding="utf-8", timeout=60)
 
         if out_path.exists():
             keyframes.append(KeyFrame(
@@ -208,7 +208,7 @@ def _extract_smart_frames(
         "-loglevel", "error",
         str(temp_dir / f"temp_%06d.{image_format}"),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=600)
     if result.returncode != 0:
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise KeyFrameError(f"ffmpeg failed:\n{result.stderr}")

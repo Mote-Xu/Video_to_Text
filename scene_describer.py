@@ -29,14 +29,16 @@ def _get_windows_proxy() -> str | None:
     return None
 
 
-SCENE_PROMPT = """You are analyzing frames from a stock trading tutorial video. Describe what you see with focus on trading-specific details. Return ONLY valid JSON (no markdown):
+# Default fallback prompt — should be overridden via content_analyzer
+DEFAULT_SCENE_PROMPT = """You are analyzing frames from a video. Describe what you see objectively and concisely.
 
+Return ONLY valid JSON (no markdown):
 {
-  "summary": "Describe the key trading patterns visible: any MA crossovers, MACD golden/death cross, KDJ signals, candlestick patterns, volume spikes, support/resistance levels, or trend changes. Be specific.",
-  "objects": ["chart elements visible: candlesticks, MA lines, MACD, KDJ, volume bars, price labels"],
-  "actions": ["what is happening in this frame: e.g. price breaking out, indicator crossing, teacher pointing at chart"],
-  "setting": "trading platform or presentation slide",
-  "on_screen_text": "key numbers/stocks/indicators visible (stock codes, prices, indicator values, timeframes)"
+  "summary": "Describe the scene: what is shown, the visual style, the main subject.",
+  "objects": ["key visible elements"],
+  "actions": ["what is happening in this frame"],
+  "setting": "indoor/outdoor, screen recording, animation, or other",
+  "on_screen_text": "any visible text, subtitles, labels, UI elements"
 }"""
 
 # Provider configs: {name: (base_url, env_var_hint)}
@@ -75,20 +77,23 @@ def describe_scenes(
     model: str = "deepseek-chat",
     max_tokens: int = 200,
     temperature: float = 0.3,
+    scene_prompt: str | None = None,
 ) -> list[SceneDescription]:
     """
     Send keyframes to a vision model for scene description.
 
-    Supports DeepSeek (default), Anthropic Claude, and OpenAI-compatible APIs.
+    Supports DeepSeek (default), Anthropic Claude, OpenAI-compatible APIs,
+    and DashScope (通义千问 VL).
 
     Parameters
     ----------
     keyframes : List of keyframes to describe.
     api_key : API key for the selected provider.
-    provider : "deepseek", "anthropic", or "openai".
-    model : Model ID (e.g. "deepseek-chat", "gpt-4o").
+    provider : "dashscope", "anthropic", "gemini", "deepseek", or "openai".
+    model : Model ID (e.g. "qwen-vl-max", "deepseek-chat", "gpt-4o").
     max_tokens : Max tokens per frame response.
     temperature : Response creativity (0 = deterministic).
+    scene_prompt : Custom prompt for scene description. Uses default if None.
 
     Returns
     -------
@@ -103,11 +108,13 @@ def describe_scenes(
             f"{env_var} not set. Add it to .env or environment."
         )
 
+    prompt = scene_prompt or DEFAULT_SCENE_PROMPT
+
     if provider == "anthropic":
-        return _describe_with_anthropic(keyframes, api_key, model, max_tokens, temperature)
+        return _describe_with_anthropic(keyframes, api_key, model, max_tokens, temperature, prompt)
     else:
         base_url = PROVIDERS[provider]["base_url"]
-        return _describe_with_openai_compat(keyframes, api_key, base_url, model, max_tokens, temperature)
+        return _describe_with_openai_compat(keyframes, api_key, base_url, model, max_tokens, temperature, prompt)
 
 
 def _describe_with_openai_compat(
@@ -117,6 +124,7 @@ def _describe_with_openai_compat(
     model: str,
     max_tokens: int,
     temperature: float,
+    scene_prompt: str,
 ) -> list[SceneDescription]:
     """Describe frames via OpenAI-compatible API (DeepSeek, OpenAI, etc.)."""
     from openai import OpenAI
@@ -167,7 +175,7 @@ def _describe_with_openai_compat(
                         "role": "user",
                         "content": [
                             {"type": "image_url", "image_url": {"url": data_uri}},
-                            {"type": "text", "text": SCENE_PROMPT},
+                            {"type": "text", "text": scene_prompt},
                         ],
                     }],
                 )
@@ -223,6 +231,7 @@ def _describe_with_anthropic(
     model: str,
     max_tokens: int,
     temperature: float,
+    scene_prompt: str,
 ) -> list[SceneDescription]:
     """Describe frames via Anthropic Claude API (native SDK)."""
     from anthropic import Anthropic
@@ -257,7 +266,7 @@ def _describe_with_anthropic(
                                 "data": image_data,
                             },
                         },
-                        {"type": "text", "text": SCENE_PROMPT},
+                        {"type": "text", "text": scene_prompt},
                     ],
                 }],
             )

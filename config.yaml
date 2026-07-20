@@ -8,15 +8,16 @@ audio:
 
 # ASR (speech-to-text) settings
 asr:
-  engine: faster-whisper
-  model_size: small         # tiny | base | small | medium
+  engine: dashscope           # "faster-whisper" | "dashscope" (Paraformer, 中文优化)
+  model_size: small          # tiny | base | small | medium (only for faster-whisper)
   device: cuda
-  compute_type: float16     # float16 | int8_float16 (use int8 if VRAM tight)
-  language: null            # null = auto-detect; or "zh", "en", "ja", etc.
+  compute_type: float16      # float16 | int8_float16 (use int8 if VRAM tight)
+  language: zh               # null = auto-detect; or "zh", "en", "ja", etc.
   beam_size: 5
   vad_filter: true
   word_timestamps: true
-  fix_errors: true          # post-process with LLM to fix homophone errors
+  fix_errors: true           # post-process with LLM to fix homophone errors
+  dashscope_model: paraformer-v2  # DashScope ASR model: paraformer-v2 | paraformer-8k-v2
 
 # Keyframe extraction
 keyframe:
@@ -41,6 +42,15 @@ vision:
   max_tokens: 400
   temperature: 0.3
   batch_size: 1
+
+# Content analysis — auto-detect video type and generate dynamic prompts
+content_analysis:
+  enabled: true
+  bilibili:
+    enabled: true             # Parse AV/BV number from filename, call B站 API
+    api_timeout: 10           # seconds
+  local_fallback: true        # If no URL found, sample first 60s ASR to classify
+  max_segments_preview: 3     # Sample N segments for LLM classification
 
 # Output
 output:

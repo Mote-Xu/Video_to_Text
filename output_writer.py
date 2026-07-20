@@ -29,8 +29,9 @@ def _format_srt_time(seconds: float) -> str:
 def write_json(result: PipelineResult, output_path: Path) -> None:
     """Write full pipeline result as a JSON report."""
     data = {
-        "version": "1.0",
+        "version": "2.0",
         "created": datetime.now(timezone.utc).isoformat(),
+        "content_analysis": result.content_profile,
         "video": {
             "path": str(result.video.path),
             "filename": result.video.filename,
@@ -103,6 +104,27 @@ def write_markdown(result: PipelineResult, output_path: Path) -> None:
         f"**FPS**: {v.fps:.1f}"
     )
     lines.append(f"**Generated**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+    # Content analysis section
+    cp = result.content_profile
+    if cp:
+        lines.append("")
+        lines.append("## 📋 Content Analysis")
+        lines.append("")
+        lines.append(f"| 项目 | 值 |")
+        lines.append(f"|------|------|")
+        lines.append(f"| 类型 | {cp.get('video_type_label', 'N/A')} |")
+        lines.append(f"| 来源 | {cp.get('source', 'N/A')} |")
+        if cp.get('title'):
+            lines.append(f"| 标题 | {cp['title']} |")
+        if cp.get('partition'):
+            lines.append(f"| 分区 | {cp['partition']} |")
+        if cp.get('tags'):
+            lines.append(f"| 标签 | {', '.join(cp['tags'][:8])} |")
+        if cp.get('topics'):
+            lines.append(f"| 主题 | {', '.join(cp['topics'][:5])} |")
+        if cp.get('bilibili_url'):
+            lines.append(f"| B站链接 | {cp['bilibili_url']} |")
     lines.append("")
 
     # -- Errors --
@@ -129,6 +151,20 @@ def write_markdown(result: PipelineResult, output_path: Path) -> None:
     lines.append("")
 
     if result.scene_descriptions:
+        # Adaptive window: short videos get tighter transcript matching
+        video_dur = result.video.duration_sec
+        total_frames = len(result.scene_descriptions)
+        frame_interval = video_dur / total_frames if total_frames else 5
+
+        if video_dur < 60:
+            window_sec = frame_interval * 1.2  # ~1 frame worth of audio
+        elif video_dur < 300:
+            window_sec = max(10, frame_interval * 2)
+        elif video_dur < 1800:
+            window_sec = 30
+        else:
+            window_sec = 45
+
         for sd in result.scene_descriptions:
             ts = _format_time(sd.timestamp_sec)
             lines.append(f"### {ts} — Frame {sd.frame_index}")
@@ -139,15 +175,15 @@ def write_markdown(result: PipelineResult, output_path: Path) -> None:
                 lines.append(f"**画面**: {sd.summary}")
                 lines.append("")
 
-            # Find transcript segments that fall within ±30s of this frame
+            # Find transcript segments that fall within ±window of this frame
             frame_ts = sd.timestamp_sec
             relevant_transcript: list[str] = []
-            while t_idx < len(transcript) and transcript[t_idx].end_sec < frame_ts - 30:
+            while t_idx < len(transcript) and transcript[t_idx].end_sec < frame_ts - window_sec:
                 t_idx += 1  # skip old segments
             temp_idx = t_idx
-            while temp_idx < len(transcript) and transcript[temp_idx].start_sec < frame_ts + 30:
+            while temp_idx < len(transcript) and transcript[temp_idx].start_sec < frame_ts + window_sec:
                 seg = transcript[temp_idx]
-                if seg.end_sec >= frame_ts - 30:
+                if seg.end_sec >= frame_ts - window_sec:
                     seg_start = _format_time(seg.start_sec)
                     relevant_transcript.append(f"[{seg_start}] {seg.text}")
                 temp_idx += 1

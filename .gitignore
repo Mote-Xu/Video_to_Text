@@ -24,6 +24,9 @@ __pycache__/
 dist/
 build/
 
+# Claude Bridge sessions (may contain API keys in transcripts)
+.bridge/
+
 # IDE
 .vscode/
 .idea/

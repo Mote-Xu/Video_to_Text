@@ -78,3 +78,4 @@ class PipelineResult:
     scene_descriptions: list[SceneDescription] = field(default_factory=list)
     stats: PipelineStats = field(default_factory=PipelineStats)
     errors: list[str] = field(default_factory=list)
+    content_profile: dict | None = None  # from content_analyzer

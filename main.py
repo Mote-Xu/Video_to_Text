@@ -62,6 +62,8 @@ Examples:
                    help="Language code override, e.g. zh, en, ja (default: auto).")
     p.add_argument("--device", type=str, choices=["cuda", "cpu"], default=None,
                    help="Device for Whisper (default: cuda).")
+    p.add_argument("--asr-engine", type=str, choices=["faster-whisper", "dashscope"], default=None,
+                   help="ASR engine (default: from config.yaml).")
 
     # Keyframes
     p.add_argument("--interval", type=float, default=None,
@@ -94,6 +96,12 @@ Examples:
     p.add_argument("--srt", action="store_true", help="Also generate SRT subtitle file.")
     p.add_argument("--keep-temp", action="store_true", help="Keep temporary files.")
 
+    # Stella integration
+    p.add_argument("--stella", action="store_true",
+                   help="Fetch Stella's video analysis from mote-home via SSH.")
+    p.add_argument("--stella-host", type=str, default="mote",
+                   help="SSH host for Stella (default: mote).")
+
     return p
 
 
@@ -107,6 +115,8 @@ def _build_overrides(args: argparse.Namespace) -> dict:
         overrides["asr.language"] = args.language
     if args.device is not None:
         overrides["asr.device"] = args.device
+    if args.asr_engine is not None:
+        overrides["asr.engine"] = args.asr_engine
     if args.interval is not None:
         overrides["keyframe.interval_sec"] = args.interval
     if args.scene_mode is not None:
@@ -140,6 +150,8 @@ def run_pipeline(
     no_markdown: bool = False,
     write_srt: bool = False,
     keep_temp: bool = False,
+    use_stella: bool = False,
+    stella_host: str = "mote",
 ) -> PipelineResult:
     """Execute the full video-to-text pipeline."""
     # If skip_keyframes, also skip OCR and vision
@@ -160,6 +172,69 @@ def run_pipeline(
           f"Duration: {video_meta.duration_sec:.1f}s | FPS: {video_meta.fps:.1f}")
     print(f"  Has audio: {video_meta.has_audio}")
     video_stem = video_meta.path.stem
+
+    # -- Phase 0.5: Content analysis --
+    content_profile: dict = {}
+    scene_prompt: str | None = None
+
+    if config.content_analysis.enabled:
+        print(f"\n[1.5/5] Analyzing content type...")
+        from content_analyzer import analyze_content
+        profile = analyze_content(
+            video_path,
+            transcript_preview=None,  # defer to after ASR if needed
+            deepseek_api_key=config.deepseek_api_key,
+            bilibili_enabled=config.content_analysis.bilibili.enabled,
+            bilibili_timeout=config.content_analysis.bilibili.api_timeout,
+            local_fallback=False,  # try filename heuristic first, LLM later
+        )
+        content_profile = {
+            "source": profile.source,
+            "video_type": profile.video_type,
+            "video_type_label": profile.video_type_label,
+            "title": profile.title,
+            "tags": profile.tags,
+            "partition": profile.partition,
+            "bilibili_url": profile.bilibili_url,
+            "topics": profile.topics,
+        }
+        # If we got a prompt (B站 or filename heuristic), use it
+        if profile.suggested_prompt:
+            scene_prompt = profile.suggested_prompt
+            print(f"  Scene prompt: {profile.video_type_label}")
+        else:
+            print(f"  Content type unknown, will classify after ASR")
+
+    # -- Phase 0.6: Stella enrichment --
+    if use_stella and content_profile:
+        from content_analyzer import extract_bilibili_id
+        from stella_bridge import fetch_stella_analysis, merge_analysis
+
+        avid, bvid = extract_bilibili_id(str(Path(video_path).name))
+        stella_id = f"av{avid}" if avid else (bvid if bvid else Path(video_path).stem)
+        print(f"\n[1.6/5] Checking Stella analysis for {stella_id}...")
+
+        stella_data = fetch_stella_analysis(stella_id, host=stella_host)
+        if stella_data:
+            content_profile = merge_analysis(stella_data, content_profile)
+            print(f"  Stella enriched! style_notes={bool(stella_data.get('style_notes'))}, "
+                  f"comments={bool(stella_data.get('comments_summary'))}")
+            # Regenerate prompt with Stella's richer context
+            from content_analyzer import generate_scene_prompt
+            scene_prompt = generate_scene_prompt(
+                content_profile.get("video_type", "general"),
+                {
+                    "title": content_profile.get("title", ""),
+                    "partition": content_profile.get("partition", ""),
+                    "topics": content_profile.get("topics", []),
+                    "style_notes": content_profile.get("style_notes", ""),
+                    "comments_summary": content_profile.get("comments_summary", ""),
+                    "key_terms": content_profile.get("key_terms", []),
+                },
+            )
+            print(f"  Prompt regenerated with Stella context")
+        else:
+            print(f"  No Stella analysis found for {stella_id}")
 
     # -- Phase 1: Extract audio --
     audio_path = None
@@ -225,11 +300,12 @@ def run_pipeline(
 
     # -- Phase 3: ASR transcription --
     if not skip_asr and video_meta.has_audio and audio_path:
-        print(f"\n[4/5] Transcribing (model: {config.asr.model_size}, device: {config.asr.device})...")
+        print(f"\n[4/5] Transcribing (engine: {config.asr.engine}, model: {config.asr.model_size})...")
         t0 = time.perf_counter()
         from transcriber import transcribe
         transcript = transcribe(
             audio_path,
+            engine=config.asr.engine,
             model_size=config.asr.model_size,
             device=config.asr.device,
             compute_type=config.asr.compute_type,
@@ -237,6 +313,8 @@ def run_pipeline(
             beam_size=config.asr.beam_size,
             vad_filter=config.asr.vad_filter,
             word_timestamps=config.asr.word_timestamps,
+            dashscope_model=config.asr.dashscope_model,
+            dashscope_api_key=config.dashscope_api_key,
         )
         stats.asr_transcription_sec = round(time.perf_counter() - t0, 2)
         result.transcript = transcript
@@ -249,7 +327,29 @@ def run_pipeline(
             from transcript_fixer import fix_transcript
             fixed = fix_transcript(transcript, config.deepseek_api_key)
             result.transcript = fixed
+            transcript = fixed
             print(f"  Fixed in {time.perf_counter() - t_fix:.1f}s")
+
+        # Content analysis: LLM fallback if B站 info not found
+        if config.content_analysis.enabled and scene_prompt is None and config.content_analysis.local_fallback:
+            print(f"  Classifying content from ASR preview...")
+            from content_analyzer import analyze_content
+            profile = analyze_content(
+                video_path,
+                transcript_preview=transcript,
+                deepseek_api_key=config.deepseek_api_key,
+                bilibili_enabled=False,  # already tried
+                local_fallback=True,
+            )
+            content_profile.update({
+                "source": profile.source,
+                "video_type": profile.video_type,
+                "video_type_label": profile.video_type_label,
+                "topics": profile.topics,
+            })
+            if profile.suggested_prompt:
+                scene_prompt = profile.suggested_prompt
+                print(f"  Scene prompt: {profile.video_type_label} (LLM)")
     else:
         print(f"\n[4/5] ASR transcription: SKIPPED")
 
@@ -286,6 +386,8 @@ def run_pipeline(
             api_key = config.dashscope_api_key  # fallback
 
         print(f"\n[5/5] Describing scenes (provider: {provider}, model: {config.vision.model})...")
+        if scene_prompt:
+            print(f"  Using dynamic prompt for: {content_profile.get('video_type_label', 'unknown')}")
         t0 = time.perf_counter()
         from scene_describer import describe_scenes
         try:
@@ -296,6 +398,7 @@ def run_pipeline(
                 model=config.vision.model,
                 max_tokens=config.vision.max_tokens,
                 temperature=config.vision.temperature,
+                scene_prompt=scene_prompt,
             )
             stats.vision_sec = round(time.perf_counter() - t0, 2)
             result.scene_descriptions = descriptions
@@ -309,9 +412,15 @@ def run_pipeline(
     # -- Phase 6: Output --
     stats.total_sec = round(time.perf_counter() - t_total_start, 2)
     result.stats = stats
+    result.content_profile = content_profile if content_profile else None
 
     print(f"\n{'=' * 60}")
     print(f"Pipeline complete in {stats.total_sec:.1f}s")
+    if content_profile:
+        print(f"Content type: {content_profile.get('video_type_label', 'unknown')} "
+              f"(source: {content_profile.get('source', 'unknown')})")
+        if content_profile.get('bilibili_url'):
+            print(f"B站: {content_profile['bilibili_url']}")
     print(f"{'=' * 60}")
 
     return result
@@ -344,6 +453,8 @@ def main() -> None:
         no_markdown=args.no_markdown,
         write_srt=args.srt,
         keep_temp=args.keep_temp,
+        use_stella=args.stella,
+        stella_host=args.stella_host,
     )
 
     # Write outputs — mirror videos/ date structure

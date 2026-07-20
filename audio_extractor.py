@@ -35,7 +35,7 @@ def probe_video(video_path: str | Path) -> VideoMeta:
         "-show_format", "-show_streams",
         str(video_path),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=30)
     if result.returncode != 0:
         raise AudioExtractionError(f"ffprobe failed:\n{result.stderr}")
 
@@ -116,7 +116,7 @@ def extract_audio(
         ["ffmpeg", "-y", "-err_detect", "ignore_err",
          "-i", str(video_path), "-vn", "-acodec", "copy",
          "-loglevel", "error", str(raw_aac)],
-        capture_output=True, text=True, timeout=300,
+        capture_output=True, text=True, encoding="utf-8", timeout=300,
     )
     if raw_result.returncode == 0 and raw_aac.exists() and raw_aac.stat().st_size > 0:
         # Convert raw AAC to WAV — accept partial success
@@ -125,7 +125,7 @@ def extract_audio(
              "-i", str(raw_aac), "-ac", str(channels), "-ar", str(sample_rate),
              "-c:a", "pcm_s16le", "-f", "wav",
              "-loglevel", "error", str(output_path)],
-            capture_output=True, text=True, timeout=300,
+            capture_output=True, text=True, encoding="utf-8", timeout=300,
         )
         raw_aac.unlink(missing_ok=True)
         if output_path.exists() and output_path.stat().st_size > 0:
@@ -137,7 +137,7 @@ def extract_audio(
          "-i", str(video_path), "-vn", "-ac", str(channels), "-ar", str(sample_rate),
          "-c:a", "pcm_s16le", "-f", "wav",
          "-loglevel", "error", str(output_path)],
-        capture_output=True, text=True, timeout=300,
+        capture_output=True, text=True, encoding="utf-8", timeout=300,
     )
     if result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
         return output_path
@@ -149,7 +149,7 @@ def extract_audio(
          "-i", str(video_path), "-vn", "-ac", str(channels), "-ar", str(sample_rate),
          "-c:a", "pcm_s16le", "-f", "wav",
          "-loglevel", "error", str(output_path)],
-        capture_output=True, text=True, timeout=300,
+        capture_output=True, text=True, encoding="utf-8", timeout=300,
     )
     if result.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
         return output_path
