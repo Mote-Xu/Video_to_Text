@@ -260,10 +260,11 @@ class PipelineHandler(BaseHTTPRequestHandler):
 
             result = subprocess.run(
                 cmd, capture_output=True, text=True, encoding="utf-8",
+                errors="replace",  # tolerate non-UTF-8 bytes in ffmpeg/API output
                 timeout=7200, cwd=str(PROJECT_ROOT), env=env,
             )
-            stdout = result.stdout
-            stderr = result.stderr
+            stdout = result.stdout or ""
+            stderr = result.stderr or ""
             success = result.returncode == 0
 
             # Extract output path from pipeline stdout
