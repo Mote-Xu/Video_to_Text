@@ -254,6 +254,7 @@ class PipelineHandler(BaseHTTPRequestHandler):
 
         try:
             env = {**__import__("os").environ}
+            env["PYTHONIOENCODING"] = "utf-8"  # force UTF-8 for print() on Windows
             ffmpeg_bin = Path("C:/anaconda3/envs/Video_to_Text/Library/bin")
             if ffmpeg_bin.exists():
                 env["PATH"] = str(ffmpeg_bin) + ";" + env.get("PATH", "")
