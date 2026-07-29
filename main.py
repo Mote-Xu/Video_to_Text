@@ -355,7 +355,8 @@ def run_pipeline(
 
     # -- Phase 4: OCR --
     if not skip_ocr and result.keyframes:
-        print(f"\n[4.5/5] Running OCR (engine: {config.ocr.engine}, lang: {config.ocr.lang})...")
+        engine_label = f"{config.ocr.engine} (GPU via Mote Sense)" if config.ocr.engine == "mote_sense" else config.ocr.engine
+        print(f"\n[4.5/5] Running OCR (engine: {engine_label})...")
         t0 = time.perf_counter()
         from ocr_extractor import run_ocr
         ocr_results = run_ocr(
@@ -363,6 +364,8 @@ def run_pipeline(
             lang=config.ocr.lang,
             use_gpu=config.ocr.use_gpu,
             conf_threshold=config.ocr.conf_threshold,
+            engine=config.ocr.engine,
+            mote_sense_url=config.ocr.mote_sense_url,
         )
         stats.ocr_sec = round(time.perf_counter() - t0, 2)
         result.ocr_results = ocr_results

@@ -30,10 +30,11 @@ keyframe:
 
 # OCR settings
 ocr:
-  engine: easyocr
+  engine: easyocr            # "easyocr" (local) | "mote_sense" (remote GPU via mote-home)
   lang: ch_sim,en           # EasyOCR: "ch_sim" = Simplified Chinese, "en" = English
   use_gpu: false            # false = CPU (avoids VRAM conflict with Whisper)
   conf_threshold: 0.5
+  mote_sense_url: http://100.118.10.0:3800/ingest  # only used when engine=mote_sense
 
 # Vision / scene description
 vision:

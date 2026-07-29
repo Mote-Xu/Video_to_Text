@@ -43,10 +43,11 @@ class KeyFrameConfig(BaseModel):
 
 
 class OcrConfig(BaseModel):
-    engine: str = "easyocr"
+    engine: str = "easyocr"            # "easyocr" | "mote_sense"
     lang: str = "ch_sim,en"            # EasyOCR: comma-separated language codes
     use_gpu: bool = False              # default CPU to avoid VRAM conflict
     conf_threshold: float = 0.5
+    mote_sense_url: str = "http://100.118.10.0:3800/ingest"  # Mote Sense API
 
 
 class VisionConfig(BaseModel):
