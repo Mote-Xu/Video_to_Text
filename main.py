@@ -205,36 +205,38 @@ def run_pipeline(
         else:
             print(f"  Content type unknown, will classify after ASR")
 
-    # -- Phase 0.6: Stella enrichment --
+    # -- Phase 0.6: Stella enrichment (deprecated — stella_bridge removed) --
     if use_stella and content_profile:
-        from content_analyzer import extract_bilibili_id
-        from stella_bridge import fetch_stella_analysis, merge_analysis
+        try:
+            from content_analyzer import extract_bilibili_id, generate_scene_prompt
+            from stella_bridge import fetch_stella_analysis, merge_analysis
 
-        avid, bvid = extract_bilibili_id(str(Path(video_path).name))
-        stella_id = f"av{avid}" if avid else (bvid if bvid else Path(video_path).stem)
-        print(f"\n[1.6/5] Checking Stella analysis for {stella_id}...")
+            avid, bvid = extract_bilibili_id(str(Path(video_path).name))
+            stella_id = f"av{avid}" if avid else (bvid if bvid else Path(video_path).stem)
+            print(f"\n[1.6/5] Checking Stella analysis for {stella_id}...")
 
-        stella_data = fetch_stella_analysis(stella_id, host=stella_host)
-        if stella_data:
-            content_profile = merge_analysis(stella_data, content_profile)
-            print(f"  Stella enriched! style_notes={bool(stella_data.get('style_notes'))}, "
-                  f"comments={bool(stella_data.get('comments_summary'))}")
-            # Regenerate prompt with Stella's richer context
-            from content_analyzer import generate_scene_prompt
-            scene_prompt = generate_scene_prompt(
-                content_profile.get("video_type", "general"),
-                {
-                    "title": content_profile.get("title", ""),
-                    "partition": content_profile.get("partition", ""),
-                    "topics": content_profile.get("topics", []),
-                    "style_notes": content_profile.get("style_notes", ""),
-                    "comments_summary": content_profile.get("comments_summary", ""),
-                    "key_terms": content_profile.get("key_terms", []),
-                },
-            )
-            print(f"  Prompt regenerated with Stella context")
-        else:
-            print(f"  No Stella analysis found for {stella_id}")
+            stella_data = fetch_stella_analysis(stella_id, host=stella_host)
+            if stella_data:
+                content_profile = merge_analysis(stella_data, content_profile)
+                print(f"  Stella enriched! style_notes={bool(stella_data.get('style_notes'))}, "
+                      f"comments={bool(stella_data.get('comments_summary'))}")
+                # Regenerate prompt with Stella's richer context
+                scene_prompt = generate_scene_prompt(
+                    content_profile.get("video_type", "general"),
+                    {
+                        "title": content_profile.get("title", ""),
+                        "partition": content_profile.get("partition", ""),
+                        "topics": content_profile.get("topics", []),
+                        "style_notes": content_profile.get("style_notes", ""),
+                        "comments_summary": content_profile.get("comments_summary", ""),
+                        "key_terms": content_profile.get("key_terms", []),
+                    },
+                )
+                print(f"  Prompt regenerated with Stella context")
+            else:
+                print(f"  No Stella analysis found for {stella_id}")
+        except ImportError:
+            print(f"\n[1.6/5] Stella bridge not available — skipping enrichment.")
 
     # -- Phase 1: Extract audio --
     audio_path = None
