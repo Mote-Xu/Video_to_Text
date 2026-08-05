@@ -42,6 +42,8 @@ class OcrResult:
     confidence: float
     frame_index: int
     timestamp_sec: float
+    bbox: list[list[int]] | None = None   # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+    image_size: list[int] | None = None    # [width, height] of the image sent to OCR
 
 
 @dataclass

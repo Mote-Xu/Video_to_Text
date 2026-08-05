@@ -3,6 +3,7 @@
 import io
 import json
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from PIL import Image
 
@@ -35,10 +36,10 @@ def _get_ocr(lang_list: list[str] | None = None):
     return _ocr
 
 
-def _ocr_frame_remote(image_path: Path, mote_sense_url: str) -> list[dict[str, str | float]]:
-    """Send a single keyframe image to Mote Sense for GPU-accelerated OCR.
+def _ocr_frame_remote(image_path: Path, mote_sense_url: str) -> list[dict]:
+    """Send a single keyframe image to Mote Sense /ocr for GPU-accelerated OCR.
 
-    Returns list of {"text": str, "confidence": float}.
+    Returns list of {"text": str, "confidence": float, "bbox": [[x,y]*4], "image_size": [w,h]}.
     """
     with open(image_path, "rb") as f:
         files = {"file": (image_path.name, f, "image/" + image_path.suffix.lstrip("."))}
@@ -52,13 +53,66 @@ def _ocr_frame_remote(image_path: Path, mote_sense_url: str) -> list[dict[str, s
     if data.get("status") != "success":
         raise OcrError(f"Mote Sense returned error: {data}")
 
-    markdown = data.get("markdown", "")
-    if not markdown or markdown.startswith("_("):
-        return []
+    blocks = data.get("blocks", [])
+    image_size = data.get("image_size")
 
-    # Split flat text into lines (each line = one detection)
-    lines = markdown.strip().split("\n")
-    return [{"text": line.strip(), "confidence": 0.8} for line in lines if line.strip()]
+    return [
+        {
+            "text": b["text"],
+            "confidence": b["confidence"],
+            "bbox": b["bbox"],
+            "image_size": image_size,
+        }
+        for b in blocks
+    ]
+
+
+def _filter_ui_noise(
+    raw_results: list[OcrResult],
+    text_frame_count: dict[str, set[int]],
+    total_frames: int,
+) -> list[OcrResult]:
+    """Filter UI elements that appear in too many frames, plus known UI keywords."""
+    ui_threshold = max(3, total_frames * 0.3)
+    ui_texts: set[str] = set()
+    for txt, frames in text_frame_count.items():
+        if len(frames) >= ui_threshold:
+            ui_texts.add(txt)
+
+    ui_prefixes = ("梗百科", "键政梗百科", "毒奶", "马超",
+                   "功能", "报价", "资讯", "工具", "帮助", "发现",
+                   "分时", "统计", "画线", "+自选", "返回")
+    ui_contains = ("梗百科bot", "梗百科b", "bilbili", "bilibili",
+                   "Lll", "bbl ", "FIO", "Doi")
+
+    filtered: list[OcrResult] = []
+    for r in raw_results:
+        if r.text in ui_texts:
+            continue
+        if any(r.text.startswith(p) for p in ui_prefixes):
+            continue
+        if any(c in r.text for c in ui_contains):
+            continue
+        if len(r.text) <= 1:  # skip single-character fragments
+            continue
+        # Skip pure numbers or timestamps (e.g. "00:06;20", "145|")
+        stripped = r.text.replace(":", "").replace(";", "").replace("|", "").replace(" ", "").replace(".", "")
+        if stripped.isdigit() and len(stripped) >= 3:
+            continue
+        # Spatial ROI: discard text in top/bottom 5% (system UI / progress bars)
+        if r.bbox and r.image_size:
+            w, h = r.image_size
+            y_min = min(p[1] for p in r.bbox)
+            y_max = max(p[1] for p in r.bbox)
+            if y_max < h * 0.05 or y_min > h * 0.95:
+                continue
+        filtered.append(r)
+
+    if ui_texts:
+        print(f"  OCR filter: removed {len(ui_texts)} UI elements, "
+              f"kept {len(filtered)}/{len(raw_results)} detections")
+
+    return filtered
 
 
 def _run_ocr_remote(
@@ -67,39 +121,60 @@ def _run_ocr_remote(
     conf_threshold: float = 0.5,
 ) -> list[OcrResult]:
     """Run OCR via Mote Sense remote GPU for a batch of keyframes."""
-    results: list[OcrResult] = []
     seen_texts: set[tuple[str, int]] = set()
+    text_frame_count: dict[str, set[int]] = {}
+    all_raw: list[OcrResult] = []
     total = len(keyframes)
     failed = 0
 
-    for i, kf in enumerate(keyframes):
-        if not kf.image_path.exists():
-            continue
+    # Filter out missing frames, keep index for ordering
+    valid = [(i, kf) for i, kf in enumerate(keyframes) if kf.image_path.exists()]
 
+    def _process_one(idx: int, kf: KeyFrame):
+        """Process a single frame — runs in thread pool."""
         try:
             detections = _ocr_frame_remote(kf.image_path, mote_sense_url)
+            return idx, kf, detections
         except OcrError as e:
-            print(f"  OCR remote [{i+1}/{total}] {kf.image_path.name}: FAILED — {e}")
-            failed += 1
-            continue
+            print(f"  OCR remote [{idx+1}/{total}] {kf.image_path.name}: FAILED — {e}")
+            return idx, kf, None
 
-        for d in detections:
-            text = d["text"]
-            conf = d["confidence"]
-            if conf < conf_threshold or not text:
+    # max_workers=2 matches Mote Sense concurrency limit
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {executor.submit(_process_one, i, kf): i for i, kf in valid}
+        for future in as_completed(futures):
+            idx, kf, detections = future.result()
+            if detections is None:
+                failed += 1
                 continue
 
-            key = (text, kf.index)
-            if key in seen_texts:
-                continue
-            seen_texts.add(key)
+            for d in detections:
+                text = d["text"]
+                conf = d["confidence"]
+                if conf < conf_threshold or not text:
+                    continue
 
-            results.append(OcrResult(
-                text=text,
-                confidence=round(float(conf), 3),
-                frame_index=kf.index,
-                timestamp_sec=kf.timestamp_sec,
-            ))
+                key = (text, kf.index)
+                if key in seen_texts:
+                    continue
+                seen_texts.add(key)
+
+                result = OcrResult(
+                    text=text,
+                    confidence=round(float(conf), 3),
+                    frame_index=kf.index,
+                    timestamp_sec=kf.timestamp_sec,
+                    bbox=d.get("bbox"),
+                    image_size=d.get("image_size"),
+                )
+                all_raw.append(result)
+
+                if text not in text_frame_count:
+                    text_frame_count[text] = set()
+                text_frame_count[text].add(kf.index)
+
+    # Apply UI element filtering
+    results = _filter_ui_noise(all_raw, text_frame_count, total)
 
     if failed:
         print(f"  OCR remote: {len(results)} detections from {total - failed}/{total} frames ({failed} failed)")
@@ -115,7 +190,7 @@ def run_ocr(
     use_gpu: bool = False,
     conf_threshold: float = 0.5,
     engine: str = "easyocr",
-    mote_sense_url: str = "http://100.118.10.0:3800/ingest",
+    mote_sense_url: str = "http://100.118.10.0:3800/ocr",
 ) -> list[OcrResult]:
     """
     Run OCR on a list of keyframes.
@@ -149,7 +224,7 @@ def run_ocr(
     results: list[OcrResult] = []
     seen_texts: set[tuple[str, int]] = set()
     # Track text frequency across frames for UI element filtering
-    text_frame_count: dict[str, int] = {}
+    text_frame_count: dict[str, set[int]] = {}
     all_raw: list[OcrResult] = []
 
     for kf in keyframes:
@@ -193,37 +268,7 @@ def run_ocr(
                 text_frame_count[key[0]] = set()
             text_frame_count[key[0]].add(kf.index)
 
-    # --- Post-process: filter UI elements that appear in too many frames ---
-    total_frames = len(keyframes)
-    ui_threshold = max(3, total_frames * 0.3)  # text in >30% of frames = UI noise
-    ui_texts: set[str] = set()
-    for txt, frames in text_frame_count.items():
-        if len(frames) >= ui_threshold:
-            ui_texts.add(txt)
-
-    # Also filter common UI keywords (prefix match)
-    ui_prefixes = ("梗百科", "键政梗百科", "毒奶", "马超",
-                   "功能", "报价", "资讯", "工具", "帮助", "发现",
-                   "分时", "统计", "画线", "+自选", "返回")
-    ui_contains = ("梗百科bot", "梗百科b", "bilbili", "bilibili",
-                   "Lll", "bbl ", "FIO", "Doi")
-    for r in all_raw:
-        if r.text in ui_texts:
-            continue
-        if any(r.text.startswith(p) for p in ui_prefixes):
-            continue
-        if any(c in r.text for c in ui_contains):
-            continue
-        if len(r.text) <= 1:  # skip single-character fragments
-            continue
-        # Skip pure numbers or timestamps (e.g. "00:06;20", "145|")
-        stripped = r.text.replace(":", "").replace(";", "").replace("|", "").replace(" ", "").replace(".", "")
-        if stripped.isdigit() and len(stripped) >= 3:
-            continue
-        results.append(r)
-
-    if ui_texts:
-        print(f"  OCR filter: removed {len(ui_texts)} UI elements, "
-              f"kept {len(results)}/{len(all_raw)} detections")
+    # Apply UI element filtering (shared logic)
+    results = _filter_ui_noise(all_raw, text_frame_count, len(keyframes))
 
     return results

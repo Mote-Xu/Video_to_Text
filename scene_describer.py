@@ -130,8 +130,8 @@ def _describe_with_openai_compat(
     from openai import OpenAI
     import httpx
 
-    # Auto-detect Windows proxy (e.g. 127.0.0.1:24072)
-    proxy_url = _get_windows_proxy()
+    # Only Gemini needs proxy (GFW). DeepSeek/DashScope direct connect is faster.
+    proxy_url = _get_windows_proxy() if "generativelanguage" in base_url else None
     http_client = None
     if proxy_url:
         http_client = httpx.Client(proxy=f"http://{proxy_url}", timeout=120)
