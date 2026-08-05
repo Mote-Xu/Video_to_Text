@@ -5,42 +5,37 @@ user-invocable: true
 metadata: { "openclaw": { "emoji": "🎬" } }
 ---
 
-# 视频处理 Pipeline（Nova 本地驱动）
+# 视频处理 Pipeline（Nova 服务器本地驱动）
 
-项目在 `e:\Desktop\Video_to_Text\`，conda env `Video_to_Text`。
-所有操作通过包装脚本执行，不要手动拼接命令。
+项目在 `/mnt/data/Video_to_Text/`，conda env `Video_to_Text`。
+所有操作通过 bash 包装脚本执行，不要手动拼接命令。
 
 ## 收到用户请求后，立即用 bash 执行对应命令：
 
 ### 用户要"列出视频"/"有哪些视频"
 ```bash
-powershell -File "E:\Nova\workspace\skills\video-to-text\video-pipeline.ps1" -Action list
+bash /mnt/data/Video_to_Text/skills/video-pipeline.sh list
 ```
 
 ### 用户要"处理 <xxx> 下的视频"
 把 `<xxx>` 替换为用户说的目录名或日期（如 "07-26" 或 "股票教学"），然后执行：
 ```bash
-powershell -File "E:\Nova\workspace\skills\video-to-text\video-pipeline.ps1" -Action process-dir -Target "<xxx>"
+bash /mnt/data/Video_to_Text/skills/video-pipeline.sh process-dir "<xxx>"
 ```
 
 ### 用户要"查看进度"/"处理完了吗"
 ```bash
-powershell -File "E:\Nova\workspace\skills\video-to-text\video-pipeline.ps1" -Action status
+bash /mnt/data/Video_to_Text/skills/video-pipeline.sh status
 ```
 
 ### 用户指定了具体视频文件名
 ```bash
-powershell -File "E:\Nova\workspace\skills\video-to-text\video-pipeline.ps1" -Action process -Target "<视频路径>"
+bash /mnt/data/Video_to_Text/skills/video-pipeline.sh process "<视频路径>"
 ```
 
 ### 用户要"列出最近输出"
 ```bash
-powershell -File "E:\Nova\workspace\skills\video-to-text\video-pipeline.ps1" -Action recent
-```
-
-### 用户要"打开面板"/"dashboard"/"看板"
-```bash
-powershell -File "E:\Nova\workspace\skills\video-to-text\video-pipeline.ps1" -Action dashboard
+bash /mnt/data/Video_to_Text/skills/video-pipeline.sh recent
 ```
 
 ## 规则
