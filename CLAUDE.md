@@ -1,6 +1,6 @@
 # Video_to_Text — 项目上下文
 
-> Claude 新会话自动加载。最后更新：2026-07-26
+> Claude 新会话自动加载。最后更新：2026-08-06
 
 ---
 
@@ -32,7 +32,7 @@
 | 组件 | 技术 | 备注 |
 |------|------|------|
 | 语言 | Python 3.12 | conda env: `Video_to_Text` |
-| ASR | faster-whisper small + DashScope Paraformer | CPU 模式（CUDA 环境有问题），DashScope 快 3 倍 + 自带标点 |
+| ASR | faster-whisper small + DashScope Paraformer | GPU 加速（GTX 1050 Ti 4GB），DashScope 快 3 倍 + 自带标点 |
 | 纠错 | DeepSeek API | 修 Whisper 同音错别字（军线→均线，金差→金叉） |
 | OCR | EasyOCR (ch_sim+en) | 替换了 PaddleOCR（3.x 有 oneDNN bug） |
 | 视觉 | 通义千问 VL (qwen-vl-max) | DashScope，国内直连，识别 K 线/均线/形态 |
@@ -66,20 +66,21 @@ Video_to_Text/
 └── outputs/              # 输出结果（按日期分文件夹）
 ```
 
-## Nova 本地驱动（TG → 视频处理）
+## Nova 服务器驱动（TG → 视频处理）
 
 ```
-TG → Nova (Mote-Office, OpenClaw :18790) → python main.py video.mp4 → outputs/
+TG → Nova (mote-home, OpenClaw :18790) → python main.py video.mp4 → outputs/
 ```
 
-Nova 运行在本机，直接调 `conda activate Video_to_Text && python main.py`，不需要 HTTP 中间层。
-`pipeline_server.py` 保留但不再作为主入口。
+Nova 运行在 mote-home 服务器上，直接调 `conda run -n Video_to_Text python main.py`，不需要 HTTP 中间层。
+项目代码在 `/mnt/data/Video_to_Text/`（`~/Video_to_Text/` symlink）。
 
 ### Nova Skill
 
-- 部署位置：`E:\Nova\workspace\skills\video-to-text\SKILL.md`
-- 本地源文件：`skills/SKILL.md`，修改后**复制到** Nova workspace（同机，不用 scp）
-- 修改后重启 Nova gateway 生效
+- 部署位置：`/mnt/data/openclaw/nova/workspace/skills/video-to-text/SKILL.md`
+- 本地源文件：`skills/SKILL.md`，修改后 `git pull` 到服务器，复制到 Nova workspace
+- 包装脚本：`skills/video-pipeline.sh`（bash，Linux）
+- 修改后重启 Nova gateway 生效：`sudo systemctl restart nova-gateway`
 
 ### 🔴 DeepSeek Flash Skill 编写铁律（Nova 同样适用）
 
@@ -91,22 +92,26 @@ Flash 模型不会"读文档推断该做什么"。SKILL.md 必须：
 
 ### 与旧 Stella 方案的区别
 
-| | Stella（已下线） | Nova（当前） |
-|---|---|---|
-| 位置 | mote-home 远程 | Mote-Office 本地 |
-| 通信 | curl :8940 HTTP | 直接 bash 调 main.py |
-| 视频访问 | 通过 Tailscale 访问本地文件 | 本地文件系统直接读 |
-| Skill | 包装脚本 curl 远程 | 直接 conda + python |
+| | Stella（已下线） | Nova 本地（已废弃） | Nova 服务器（当前） |
+|---|---|---|---|
+| 位置 | mote-home 远程 | Mote-Office 本地 | mote-home 本地 |
+| 通信 | curl :8940 HTTP | 直接 bash 调 main.py | 直接 bash 调 main.py |
+| 视频访问 | 通过 Tailscale 访问本地文件 | 本地文件系统直接读 | 服务器本地文件系统 |
+| Skill | 包装脚本 curl 远程 | 直接 conda + python | bash 包装脚本 + conda |
+| GPU | ❌ | ❌（CUDA DLL 缺失） | ✅ GTX 1050 Ti 4GB |
 
 ## 已知问题
 
-- RTX 3050 4GB VRAM：CUDA 环境有 cublas64_12.dll 缺失问题，Whisper 目前用 CPU
+- ~~RTX 3050 4GB VRAM：CUDA 环境有 cublas64_12.dll 缺失~~ **已解决：迁移到 mote-home GTX 1050 Ti，CUDA 正常工作**
+- GTX 1050 Ti 4GB VRAM：可跑 faster-whisper small GPU 加速，OCR 保持 CPU（避免 VRAM 冲突）
 - PaddleOCR 3.x 有 oneDNN bug，已换 EasyOCR
 - DeepSeek API 不支持图片输入
 - Gemini 免费层配额太小不稳定
 - 部分录屏视频 AAC 音频编码损坏，用原始 AAC 提取策略可部分恢复
 - **已解决**: Stella (DeepSeek V4 Flash) Skill 不响应 — 原因是 SKILL.md 参考文档风格，重写为指令式后正常（2026-07-20）
 - **2026-07-26**: Stella 已下线，改由 Nova（本机 OpenClaw）直接本地驱动 main.py，去掉远程 HTTP 中间层
+- **2026-08-06**: 项目从 Mote-Office 迁移到 mote-home 服务器，Nova 在服务器上直接驱动（`/mnt/data/Video_to_Text/`）
+- **2026-08-06**: Nova TG bot token 缺失，需从 @BotFather 获取后更新 `/mnt/data/openclaw/nova/openclaw.json`
 
 ## 使用方式
 
