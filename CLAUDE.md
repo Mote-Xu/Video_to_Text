@@ -32,7 +32,7 @@
 | 组件 | 技术 | 备注 |
 |------|------|------|
 | 语言 | Python 3.12 | conda env: `Video_to_Text` |
-| ASR | faster-whisper small（本地） | ⚠️ 本机 CUDA 缺 cublas64_12.dll，需 `--device cpu`；服务器 GTX 1050 Ti 可 GPU |
+| ASR | faster-whisper small（本地，CPU） | 全链路 CPU：本机缺 cublas64_12.dll；服务器 torch 2.13.0 不支持 GTX 1050 Ti (sm_61)。GPU 留给 Mote Sense |
 | 纠错 | ollama deepseek-v4-flash:0731 | 修 Whisper 同音错别字（军线→均线，金差→金叉） |
 | OCR | EasyOCR (ch_sim+en) | 替换了 PaddleOCR（3.x 有 oneDNN bug） |
 | 视觉 | ollama qwen3.5:397b | ⚠️ flash 不支持图片输入，视觉必须用 qwen3.5 |
@@ -118,8 +118,8 @@ Flash 模型不会"读文档推断该做什么"。SKILL.md 必须：
 ## 已知问题
 
 - ~~RTX 3050 4GB VRAM：CUDA 环境有 cublas64_12.dll 缺失~~ **已解决：迁移到 mote-home GTX 1050 Ti，CUDA 正常工作**
-- ⚠️ **本机（Mote-Office）CUDA 仍缺 cublas64_12.dll**：本地跑 faster-whisper 需 `--device cpu`（慢但可用）；服务器 GPU 正常
-- GTX 1050 Ti 4GB VRAM：可跑 faster-whisper small GPU 加速，OCR 保持 CPU（避免 VRAM 冲突）
+- ⚠️ **ASR 全链路 CPU（刻意设计，2026-09-07 确认）**：本机缺 cublas64_12.dll；服务器 torch 2.13.0+cu130 不支持 GTX 1050 Ti (sm_61)。迁移时（08-06）ASR 走 DashScope 云端、GPU 留给 Mote Sense（mote-sense 环境 torch 2.5.1+cu121 兼容）。config.yaml `asr.device: cpu` 为默认值，Nova 驱动不传 `--device` 即可跑通
+- GTX 1050 Ti 4GB VRAM：Mote Sense 专用（faster-whisper small + EasyOCR），Video_to_Text 不占用
 - PaddleOCR 3.x 有 oneDNN bug，已换 EasyOCR
 - DeepSeek API 不支持图片输入
 - Gemini 免费层配额太小不稳定
