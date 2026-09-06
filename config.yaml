@@ -8,7 +8,7 @@ audio:
 
 # ASR (speech-to-text) settings
 asr:
-  engine: dashscope           # "faster-whisper" | "dashscope" (Paraformer, 中文优化)
+  engine: faster-whisper     # "faster-whisper" (本地) | "dashscope" (云端, key 已失效)
   model_size: small          # tiny | base | small | medium (only for faster-whisper)
   device: cuda
   compute_type: float16      # float16 | int8_float16 (use int8 if VRAM tight)
@@ -38,11 +38,17 @@ ocr:
 
 # Vision / scene description
 vision:
-  provider: dashscope       # dashscope | gemini | deepseek | anthropic | openai
-  model: qwen-vl-max
+  provider: ollama          # dashscope | gemini | deepseek | anthropic | openai | ollama
+  model: qwen3.5:397b       # ollama vision model (flash 不支持图片输入)
   max_tokens: 400
   temperature: 0.3
   batch_size: 1
+
+# Ollama cloud (OpenAI-compatible API)
+ollama:
+  base_url: https://ollama.com/v1
+  model: deepseek-v4-flash:0731   # text tasks: ASR 纠错 / 内容分类
+  vision_model: qwen3.5:397b      # vision tasks: 场景描述
 
 # Content analysis — auto-detect video type and generate dynamic prompts
 content_analysis:

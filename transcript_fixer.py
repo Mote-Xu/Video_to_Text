@@ -99,20 +99,22 @@ def fix_transcript(
     api_key: str,
     model: str = "deepseek-chat",
     batch_size: int = 20,
+    base_url: str = "https://api.deepseek.com",
 ) -> list[TranscriptSegment]:
     """
     Fix common ASR errors using an LLM.
 
     Steps:
     1. Pre-filter obviously hallucinated/garbled segments
-    2. Send remaining segments to DeepSeek for homophone correction
+    2. Send remaining segments to LLM for homophone correction
 
     Parameters
     ----------
     segments : Original transcript segments.
-    api_key : DeepSeek or OpenAI-compatible API key.
+    api_key : OpenAI-compatible API key.
     model : LLM model ID.
     batch_size : How many segments to send per API call.
+    base_url : OpenAI-compatible endpoint (e.g. ollama cloud).
 
     Returns
     -------
@@ -128,7 +130,7 @@ def fix_transcript(
 
     from openai import OpenAI
 
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     fixed: list[TranscriptSegment] = []
 

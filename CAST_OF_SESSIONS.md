@@ -10,3 +10,5 @@
 | Video_to_Text worker | a5274de5 | 交互 | 🪦 retired | 处理07-24视频 + 状态监控部署 | 2026-07-24 07:10 |
 | Stella→Nova 迁移 | eb65dd45 | 交互 | 🪦 retired | CLAUDE.md + Skill 迁移到 Nova 本地驱动 | 2026-07-26 |
 | Video_to_Text → mote-home 迁移 | dace54bd | 交互 | 🔧 worker | 项目迁到 mote-home 服务器 + Nova 网关配置 | 2026-08-06 |
+| 处理 BV1m1hF68Erv | 111d3021 | 交互 | 🔧 worker | 下载 B 站视频并跑 pipeline | 2026-08-30 |
+| 引擎切换 ollama | b9b83445 | 交互 | 🔧 worker | LLM 引擎切 ollama（flash 文本 + qwen3.5 视觉），端到端验证通过 | 2026-09-07 |

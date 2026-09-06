@@ -183,10 +183,12 @@ def run_pipeline(
         profile = analyze_content(
             video_path,
             transcript_preview=None,  # defer to after ASR if needed
-            deepseek_api_key=config.deepseek_api_key,
+            deepseek_api_key=config.ollama_api_key or config.deepseek_api_key,
             bilibili_enabled=config.content_analysis.bilibili.enabled,
             bilibili_timeout=config.content_analysis.bilibili.api_timeout,
             local_fallback=False,  # try filename heuristic first, LLM later
+            llm_model=config.ollama.model,
+            llm_base_url=config.ollama.base_url,
         )
         content_profile = {
             "source": profile.source,
@@ -323,11 +325,16 @@ def run_pipeline(
         print(f"  Transcript: {len(transcript)} segments ({stats.asr_transcription_sec}s)")
 
         # Post-process: fix homophone errors
-        if config.asr.fix_errors and config.deepseek_api_key:
+        if config.asr.fix_errors and (config.ollama_api_key or config.deepseek_api_key):
             print(f"  Fixing typos with LLM...")
             t_fix = time.perf_counter()
             from transcript_fixer import fix_transcript
-            fixed = fix_transcript(transcript, config.deepseek_api_key)
+            fixed = fix_transcript(
+                transcript,
+                config.ollama_api_key or config.deepseek_api_key,
+                model=config.ollama.model,
+                base_url=config.ollama.base_url,
+            )
             result.transcript = fixed
             transcript = fixed
             print(f"  Fixed in {time.perf_counter() - t_fix:.1f}s")
@@ -339,9 +346,11 @@ def run_pipeline(
             profile = analyze_content(
                 video_path,
                 transcript_preview=transcript,
-                deepseek_api_key=config.deepseek_api_key,
+                deepseek_api_key=config.ollama_api_key or config.deepseek_api_key,
                 bilibili_enabled=False,  # already tried
                 local_fallback=True,
+                llm_model=config.ollama.model,
+                llm_base_url=config.ollama.base_url,
             )
             content_profile.update({
                 "source": profile.source,
@@ -387,6 +396,8 @@ def run_pipeline(
             api_key = config.deepseek_api_key
         elif provider == "anthropic":
             api_key = config.anthropic_api_key
+        elif provider == "ollama":
+            api_key = config.ollama_api_key
         else:
             api_key = config.dashscope_api_key  # fallback
 
@@ -396,11 +407,15 @@ def run_pipeline(
         t0 = time.perf_counter()
         from scene_describer import describe_scenes
         try:
+            # ollama 视觉模型走 config.ollama.vision_model（flash 不支持图片）
+            vision_model = config.vision.model
+            if provider == "ollama":
+                vision_model = config.ollama.vision_model
             descriptions = describe_scenes(
                 result.keyframes,
                 api_key=api_key,
                 provider=provider,
-                model=config.vision.model,
+                model=vision_model,
                 max_tokens=config.vision.max_tokens,
                 temperature=config.vision.temperature,
                 scene_prompt=scene_prompt,

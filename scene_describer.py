@@ -53,6 +53,10 @@ PROVIDERS = {
         "base_url": "https://api.openai.com/v1",
         "env_var": "OPENAI_API_KEY",
     },
+    "ollama": {
+        "base_url": "https://ollama.com/v1",
+        "env_var": "OLLAMA_API_KEY",
+    },
 }
 
 
@@ -73,14 +77,14 @@ def describe_scenes(
     Send keyframes to a vision model for scene description.
 
     Supports DeepSeek (default), Anthropic Claude, OpenAI-compatible APIs,
-    and DashScope (通义千问 VL).
+    DashScope (通义千问 VL), and Ollama cloud.
 
     Parameters
     ----------
     keyframes : List of keyframes to describe.
     api_key : API key for the selected provider.
-    provider : "dashscope", "anthropic", "gemini", "deepseek", or "openai".
-    model : Model ID (e.g. "qwen-vl-max", "deepseek-chat", "gpt-4o").
+    provider : "dashscope", "anthropic", "gemini", "deepseek", "openai", or "ollama".
+    model : Model ID (e.g. "qwen-vl-max", "deepseek-chat", "gpt-4o", "qwen3.5:397b").
     max_tokens : Max tokens per frame response.
     temperature : Response creativity (0 = deterministic).
     scene_prompt : Custom prompt for scene description. Uses default if None.

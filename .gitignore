@@ -1,6 +1,7 @@
 # Private info
 PRIVATE.md
 .env
+ollama key
 
 # Video files
 videos/

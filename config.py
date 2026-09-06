@@ -51,11 +51,17 @@ class OcrConfig(BaseModel):
 
 
 class VisionConfig(BaseModel):
-    provider: str = "dashscope"          # dashscope / gemini / deepseek / anthropic / openai
+    provider: str = "dashscope"          # dashscope / gemini / deepseek / anthropic / openai / ollama
     model: str = "qwen-vl-max"
     max_tokens: int = 200
     temperature: float = 0.3
     batch_size: int = 1                # frames per API call
+
+
+class OllamaConfig(BaseModel):
+    base_url: str = "https://ollama.com/v1"   # OpenAI-compatible endpoint
+    model: str = "deepseek-v4-flash:0731"     # text tasks (fix/classify)
+    vision_model: str = "qwen3.5:397b"        # vision tasks (scene description)
 
 
 class BilibiliConfig(BaseModel):
@@ -82,6 +88,7 @@ class PipelineConfig(BaseModel):
     keyframe: KeyFrameConfig = Field(default_factory=KeyFrameConfig)
     ocr: OcrConfig = Field(default_factory=OcrConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     content_analysis: ContentAnalysisConfig = Field(default_factory=ContentAnalysisConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
 
@@ -90,6 +97,7 @@ class PipelineConfig(BaseModel):
     gemini_api_key: str = ""
     deepseek_api_key: str = ""
     anthropic_api_key: str = ""
+    ollama_api_key: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +139,8 @@ def load_config(
         env_data["deepseek_api_key"] = api_key
     if api_key := os.getenv("ANTHROPIC_API_KEY"):
         env_data["anthropic_api_key"] = api_key
+    if api_key := os.getenv("OLLAMA_API_KEY"):
+        env_data["ollama_api_key"] = api_key
 
     # 4. Build config dict with nested structure
     config_dict: dict[str, Any] = {
@@ -139,12 +149,14 @@ def load_config(
         "keyframe": (yaml_data.get("keyframe") or {}),
         "ocr": (yaml_data.get("ocr") or {}),
         "vision": (yaml_data.get("vision") or {}),
+        "ollama": (yaml_data.get("ollama") or {}),
         "content_analysis": (yaml_data.get("content_analysis") or {}),
         "output": (yaml_data.get("output") or {}),
         "dashscope_api_key": env_data.get("dashscope_api_key", ""),
         "gemini_api_key": env_data.get("gemini_api_key", ""),
         "deepseek_api_key": env_data.get("deepseek_api_key", ""),
         "anthropic_api_key": env_data.get("anthropic_api_key", ""),
+        "ollama_api_key": env_data.get("ollama_api_key", ""),
     }
 
     # 5. Apply CLI overrides (dot-notation keys like "asr.model_size")

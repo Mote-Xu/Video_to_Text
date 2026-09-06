@@ -1,14 +1,14 @@
 # Video_to_Text — 项目上下文
 
-> Claude 新会话自动加载。最后更新：2026-08-06
+> Claude 新会话自动加载。最后更新：2026-09-07
 
 ---
 
 ## 项目概述
 
 将视频转换成结构化文本的 Python 工具。三大功能：
-1. **音频提取 + ASR 转录**（faster-whisper → DeepSeek 纠错别字）
-2. **关键帧提取 + 场景描述**（通义千问 VL，国内直连）
+1. **音频提取 + ASR 转录**（faster-whisper → ollama flash 纠错别字）
+2. **关键帧提取 + 场景描述**（ollama qwen3.5 视觉）
 3. **OCR 屏幕文字提取**（EasyOCR，中文识别好）
 
 输出按时间轴排列的 Markdown + 全量 JSON。每个视频一个文件夹：`outputs/日期/视频名/report.{json,md}` + `keyframes/`。
@@ -32,12 +32,21 @@
 | 组件 | 技术 | 备注 |
 |------|------|------|
 | 语言 | Python 3.12 | conda env: `Video_to_Text` |
-| ASR | faster-whisper small + DashScope Paraformer | GPU 加速（GTX 1050 Ti 4GB），DashScope 快 3 倍 + 自带标点 |
-| 纠错 | DeepSeek API | 修 Whisper 同音错别字（军线→均线，金差→金叉） |
+| ASR | faster-whisper small（本地） | ⚠️ 本机 CUDA 缺 cublas64_12.dll，需 `--device cpu`；服务器 GTX 1050 Ti 可 GPU |
+| 纠错 | ollama deepseek-v4-flash:0731 | 修 Whisper 同音错别字（军线→均线，金差→金叉） |
 | OCR | EasyOCR (ch_sim+en) | 替换了 PaddleOCR（3.x 有 oneDNN bug） |
-| 视觉 | 通义千问 VL (qwen-vl-max) | DashScope，国内直连，识别 K 线/均线/形态 |
+| 视觉 | ollama qwen3.5:397b | ⚠️ flash 不支持图片输入，视觉必须用 qwen3.5 |
 | 视频处理 | ffmpeg (conda 安装) | 音频用 `-c:a pcm_s16le -err_detect ignore_err` |
 | 配置 | Pydantic + YAML + .env | CLI > .env > config.yaml |
+
+### 🔴 LLM 引擎：ollama cloud（2026-09-07 切换）
+
+- **端点**：`https://ollama.com/v1`（OpenAI 兼容），key 在 `.env` 的 `OLLAMA_API_KEY`（源文件 `ollama key`，已 gitignore）
+- **文本任务**（ASR 纠错 / 内容分类）→ `deepseek-v4-flash:0731`（config.yaml `ollama.model`）
+- **视觉任务**（场景描述）→ `qwen3.5:397b`（config.yaml `ollama.vision_model`）——flash 不支持图片输入（HTTP 400）
+- **flash 有 thinking 流**：会吃掉部分 max_tokens，纯文本任务 max_tokens 给足（≥300）
+- 旧 provider（dashscope/gemini/deepseek/anthropic/openai）代码保留，改 `vision.provider` 可切回
+- ⚠️ **DASHSCOPE_API_KEY 已失效**（2026-09-07 实测 401），dashscope ASR/视觉不可用
 | 输出 | JSON + Markdown | 时间轴格式：画面+讲解+OCR 按时间排列 |
 
 ## 项目结构
@@ -75,6 +84,12 @@ TG → Nova (mote-home, OpenClaw :18790) → python main.py video.mp4 → output
 Nova 运行在 mote-home 服务器上，直接调 `conda run -n Video_to_Text python main.py`，不需要 HTTP 中间层。
 项目代码在 `/mnt/data/Video_to_Text/`（`~/Video_to_Text/` symlink）。
 
+### 📤 输出位置与拉回规范（2026-08-30 立）
+
+- 服务器 main.py 实际输出到**视频同目录**：`videos/日期/视频名/report.{json,md}` + `keyframes/`（旧版行为，与本地 `outputs/` 规范不同）
+- **服务器不会自动同步回笔记本**——处理完后需手动 `scp -r` 拉回
+- 拉回本地**必须放 `outputs/日期/视频名/`**（项目规范），❌ 禁止放 `videos/`（2026-08-30 教训：scp 目标目录写错，拉到 videos/ 造成结构错位）
+
 ### Nova Skill
 
 - 部署位置：`/mnt/data/openclaw/nova/workspace/skills/video-to-text/SKILL.md`
@@ -103,6 +118,7 @@ Flash 模型不会"读文档推断该做什么"。SKILL.md 必须：
 ## 已知问题
 
 - ~~RTX 3050 4GB VRAM：CUDA 环境有 cublas64_12.dll 缺失~~ **已解决：迁移到 mote-home GTX 1050 Ti，CUDA 正常工作**
+- ⚠️ **本机（Mote-Office）CUDA 仍缺 cublas64_12.dll**：本地跑 faster-whisper 需 `--device cpu`（慢但可用）；服务器 GPU 正常
 - GTX 1050 Ti 4GB VRAM：可跑 faster-whisper small GPU 加速，OCR 保持 CPU（避免 VRAM 冲突）
 - PaddleOCR 3.x 有 oneDNN bug，已换 EasyOCR
 - DeepSeek API 不支持图片输入
@@ -112,6 +128,7 @@ Flash 模型不会"读文档推断该做什么"。SKILL.md 必须：
 - **2026-07-26**: Stella 已下线，改由 Nova（本机 OpenClaw）直接本地驱动 main.py，去掉远程 HTTP 中间层
 - **2026-08-06**: 项目从 Mote-Office 迁移到 mote-home 服务器，Nova 在服务器上直接驱动（`/mnt/data/Video_to_Text/`）
 - **2026-08-06**: Nova TG bot token 缺失，需从 @BotFather 获取后更新 `/mnt/data/openclaw/nova/openclaw.json`
+- **2026-09-07**: LLM 引擎切换为 ollama cloud（flash 文本 + qwen3.5 视觉）；DASHSCOPE_API_KEY 已失效（401）
 
 ## 使用方式
 

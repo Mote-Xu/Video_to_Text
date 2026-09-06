@@ -297,10 +297,12 @@ Transcription samples:"""
 
 def classify_from_transcript(
     transcript_segments: list,
-    deepseek_api_key: str,
+    api_key: str,
+    model: str = "deepseek-chat",
+    base_url: str = "https://api.deepseek.com",
 ) -> dict | None:
-    """Use DeepSeek to classify video type from a few ASR segments."""
-    if not transcript_segments or not deepseek_api_key:
+    """Use an LLM to classify video type from a few ASR segments."""
+    if not transcript_segments or not api_key:
         return None
 
     from openai import OpenAI
@@ -310,11 +312,11 @@ def classify_from_transcript(
         for s in transcript_segments[:10]
     )
 
-    client = OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     try:
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=model,
             max_tokens=200,
             temperature=0.1,
             messages=[{"role": "user", "content": f"{CLASSIFY_PROMPT}\n\n{samples_text}"}],
@@ -345,6 +347,8 @@ def analyze_content(
     bilibili_enabled: bool = True,
     bilibili_timeout: int = 10,
     local_fallback: bool = True,
+    llm_model: str = "deepseek-chat",
+    llm_base_url: str = "https://api.deepseek.com",
 ) -> ContentProfile:
     """
     Analyze video content and generate a ContentProfile.
@@ -353,10 +357,12 @@ def analyze_content(
     ----------
     video_path : Path to video file.
     transcript_preview : Optional first N TranscriptSegments for LLM classification.
-    deepseek_api_key : DeepSeek API key for LLM fallback.
+    deepseek_api_key : OpenAI-compatible API key for LLM fallback.
     bilibili_enabled : Try B站 API.
     bilibili_timeout : API timeout in seconds.
     local_fallback : Use LLM fallback if B站 info unavailable.
+    llm_model : LLM model ID for classification.
+    llm_base_url : OpenAI-compatible endpoint.
 
     Returns
     -------
@@ -409,7 +415,10 @@ def analyze_content(
     # Strategy 3: LLM fallback from ASR preview
     if local_fallback and transcript_preview and deepseek_api_key:
         print(f"  尝试 LLM 分类 ({len(transcript_preview)} 条转录样本)...")
-        result = classify_from_transcript(transcript_preview, deepseek_api_key)
+        result = classify_from_transcript(
+            transcript_preview, deepseek_api_key,
+            model=llm_model, base_url=llm_base_url,
+        )
         if result:
             vtype = result.get("video_type", "general")
             vtype = vtype if vtype in PROMPT_TEMPLATES else "general"
