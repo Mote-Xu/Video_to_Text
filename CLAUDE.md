@@ -46,7 +46,7 @@
 - **视觉任务**（场景描述）→ `qwen3.5:397b`（config.yaml `ollama.vision_model`）——flash 不支持图片输入（HTTP 400）
 - **flash 有 thinking 流**：会吃掉部分 max_tokens，纯文本任务 max_tokens 给足（≥300）
 - 旧 provider（dashscope/gemini/deepseek/anthropic/openai）代码保留，改 `vision.provider` 可切回
-- ⚠️ **DASHSCOPE_API_KEY 已失效**（2026-09-07 实测 401），dashscope ASR/视觉不可用
+- ⚠️ **DEEPSEEK_API_KEY 已吊销**（2026-09-07 实测 401），已从两端 .env 删除；DASHSCOPE key 有效（本机环境变量曾覆盖 .env 导致误判 401，勿再犯）
 | 输出 | JSON + Markdown | 时间轴格式：画面+讲解+OCR 按时间排列 |
 
 ## 项目结构
@@ -69,7 +69,7 @@ Video_to_Text/
 │   ├── SKILL.md           #   OpenClaw Skill 定义（指令式，DeepSeek Flash 用）
 │   └── analyze-video.md   #   参考文档
 ├── config.yaml           # 默认配置
-├── .env                  # API keys（DASHSCOPE_API_KEY, DEEPSEEK_API_KEY）
+├── .env                  # API keys（DASHSCOPE_API_KEY, OLLAMA_API_KEY）
 ├── requirements.txt
 ├── videos/               # 待处理视频（按日期分文件夹）
 └── outputs/              # 输出结果（按日期分文件夹）
@@ -128,7 +128,7 @@ Flash 模型不会"读文档推断该做什么"。SKILL.md 必须：
 - **2026-07-26**: Stella 已下线，改由 Nova（本机 OpenClaw）直接本地驱动 main.py，去掉远程 HTTP 中间层
 - **2026-08-06**: 项目从 Mote-Office 迁移到 mote-home 服务器，Nova 在服务器上直接驱动（`/mnt/data/Video_to_Text/`）
 - **2026-08-06**: Nova TG bot token 缺失，需从 @BotFather 获取后更新 `/mnt/data/openclaw/nova/openclaw.json`
-- **2026-09-07**: LLM 引擎切换为 ollama cloud（flash 文本 + qwen3.5 视觉）；DASHSCOPE_API_KEY 已失效（401）
+- **2026-09-07**: LLM 引擎切换为 ollama cloud（flash 文本 + qwen3.5 视觉）；DEEPSEEK_API_KEY 已吊销并删除，DASHSCOPE key 仍有效
 
 ## 使用方式
 
