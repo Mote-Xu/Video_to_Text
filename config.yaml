@@ -10,7 +10,7 @@ audio:
 asr:
   engine: faster-whisper     # "faster-whisper" (本地) | "dashscope" (云端, key 已失效)
   model_size: small          # tiny | base | small | medium (only for faster-whisper)
-  device: cuda
+  device: cpu                # 本机缺 cublas64_12.dll；服务器 torch 2.13.0 不支持 GTX 1050 Ti (sm_61) → 全链路 CPU
   compute_type: float16      # float16 | int8_float16 (use int8 if VRAM tight)
   language: zh               # null = auto-detect; or "zh", "en", "ja", etc.
   beam_size: 5
